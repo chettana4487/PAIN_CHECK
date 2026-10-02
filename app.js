@@ -223,7 +223,8 @@ function normalizeRecord(item) {
     "Pain post-op แรกรับ : ฟอร์มปรอท": painPostOpThermo,
     "Pain post-op แรกรับ : Nurse Note": painPostOpNote,
     "Guideline Post-op": guidelinePostOp,
-    "หมายเหตุ": note
+    "หมายเหตุ": note,
+    "_sheetName": item._sheetName || state.currentSheet || ""
   };
 }
 
@@ -249,6 +250,9 @@ let state = {
   activeFilter: "all", // "all" | "severe" | "surgery" | "incomplete"
   viewMode: "cards",   // "cards" | "table"
   activeSearchHN: "",
+  searchAllMonths: true, // ค้นหาทุกเดือนย้อนหลังเป็นค่าเริ่มต้น
+  allMonthsResults: [],  // ผลการค้นหาประวัติข้ามทุกเดือน
+  isSearchingAllMonths: false,
   googleScriptUrl: localStorage.getItem("painApp_scriptUrl") || DEFAULT_SCRIPT_URL,
   currentTab: "form",  // "form" | "history" | "dashboard"
   isOnlineSyncing: false
@@ -263,6 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadStoredRecords();
   populateSheetDropdowns(state.sheets, state.currentSheet);
   bindEvents();
+  updateSearchScopeButtonUI();
   document.body.setAttribute("data-active-tab", "form");
   renderKPIs();
   
@@ -314,6 +319,8 @@ function initDOMElements() {
   elements.btnRefreshHistorySheets = document.getElementById("btnRefreshHistorySheets");
   elements.inputHistorySearch = document.getElementById("inputHistorySearch");
   elements.btnClearHistorySearch = document.getElementById("btnClearHistorySearch");
+  elements.btnToggleSearchScope = document.getElementById("btnToggleSearchScope");
+  elements.searchScopeText = document.getElementById("searchScopeText");
   
   // View Switchers
   elements.btnViewCards = document.getElementById("btnViewCards");
@@ -418,7 +425,27 @@ function bindEvents() {
     });
   }
 
-  // Integrated History Search Input
+  // Toggle Search Scope (All Months vs Current Month)
+  if (elements.btnToggleSearchScope) {
+    elements.btnToggleSearchScope.addEventListener("click", () => {
+      state.searchAllMonths = !state.searchAllMonths;
+      updateSearchScopeButtonUI();
+      if (state.activeSearchHN) {
+        if (state.searchAllMonths) {
+          searchLocalMultiSheetCache(state.activeSearchHN);
+          renderHistoryView();
+          fetchRemoteSearchAllMonths(state.activeSearchHN);
+        } else {
+          renderHistoryView();
+        }
+      } else {
+        renderHistoryView();
+      }
+    });
+  }
+
+  // Integrated History Search Input with Instant Cache + Debounced Remote Fetch
+  let historySearchDebounceTimer = null;
   if (elements.inputHistorySearch) {
     elements.inputHistorySearch.addEventListener("input", (e) => {
       const val = e.target.value.trim();
@@ -427,7 +454,26 @@ function bindEvents() {
       if (elements.btnClearHistorySearch) {
         elements.btnClearHistorySearch.style.display = val ? "flex" : "none";
       }
-      renderHistoryView();
+      
+      if (!val) {
+        state.allMonthsResults = [];
+        renderHistoryView();
+        return;
+      }
+      
+      if (state.searchAllMonths) {
+        // 1. Instant Cache Search (< 5ms)
+        searchLocalMultiSheetCache(val);
+        renderHistoryView();
+        
+        // 2. Debounced Remote Search across all Google Sheets tabs
+        clearTimeout(historySearchDebounceTimer);
+        historySearchDebounceTimer = setTimeout(() => {
+          fetchRemoteSearchAllMonths(val);
+        }, 350);
+      } else {
+        renderHistoryView();
+      }
     });
   }
 
@@ -437,11 +483,12 @@ function bindEvents() {
       if (elements.searchANInput) elements.searchANInput.value = "";
       elements.btnClearHistorySearch.style.display = "none";
       state.activeSearchHN = "";
+      state.allMonthsResults = [];
       renderHistoryView();
     });
   }
 
-  // Quick Check HN in Form
+  // Quick Check HN in Form (Checks all months!)
   if (elements.btnQuickCheckHN) {
     elements.btnQuickCheckHN.addEventListener("click", () => {
       const q = (elements.inputAN.value || "").trim();
@@ -450,7 +497,7 @@ function bindEvents() {
         elements.inputAN.focus();
         return;
       }
-      checkHNInCurrentSheet(q);
+      checkHNHistory(q);
     });
   }
 
@@ -476,6 +523,7 @@ function bindEvents() {
       if (elements.inputHistorySearch) elements.inputHistorySearch.value = "";
       if (elements.btnClearHistorySearch) elements.btnClearHistorySearch.style.display = "none";
       state.activeSearchHN = "";
+      state.allMonthsResults = [];
       renderHistoryView();
     });
   }
@@ -744,28 +792,205 @@ async function handleFormSubmit(e) {
 }
 
 /**
- * ตรวจสอบ HN ในชีตปัจจุบันแบบรวดเร็ว
+ * อัปเดต UI ของปุ่มสลับขอบเขตการค้นหา (ทุกเดือน vs เดือนนี้)
  */
-function checkHNInCurrentSheet(hn) {
-  const match = state.records.filter(r => String(r["HN"] || "").toLowerCase() === hn.toLowerCase());
-  if (match.length > 0) {
-    showToast(`พบประวัติเดิมของ HN ${hn} ในชีตนี้แล้ว ${match.length} รายการ`, "info");
-    elements.searchANInput.value = hn;
-    switchTab("history");
-    executeSearch();
+function updateSearchScopeButtonUI() {
+  const btn = document.getElementById("btnToggleSearchScope");
+  const txt = document.getElementById("searchScopeText");
+  if (!btn) return;
+  
+  if (state.searchAllMonths) {
+    btn.classList.add("active");
+    btn.title = "กำลังค้นหา: ทุกเดือนย้อนหลัง (คลิกเพื่อค้นหาเฉพาะเดือนนี้)";
+    btn.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> <span id="searchScopeText">ทุกเดือน</span>`;
   } else {
-    showToast(`ไม่พบประวัติเดิมของ HN ${hn} ในชีตเดือนนี้ (สามารถลงบันทึกเป็นคนไข้รายใหม่ได้ทันที)`, "success");
+    btn.classList.remove("active");
+    btn.title = "กำลังค้นหา: เฉพาะเดือนนี้ (คลิกเพื่อค้นหาทุกเดือนย้อนหลัง)";
+    btn.innerHTML = `<i class="fa-solid fa-calendar-day"></i> <span id="searchScopeText">เดือนนี้</span>`;
   }
 }
 
 /**
- * ค้นหาประวัติ HN
+ * ล้างการค้นหาทุกเดือนแล้วกลับสู่ชีตปัจจุบัน
+ */
+window.resetSearchToCurrentSheet = function() {
+  state.searchAllMonths = false;
+  state.activeSearchHN = "";
+  state.allMonthsResults = [];
+  if (elements.inputHistorySearch) elements.inputHistorySearch.value = "";
+  if (elements.searchANInput) elements.searchANInput.value = "";
+  if (elements.btnClearHistorySearch) elements.btnClearHistorySearch.style.display = "none";
+  updateSearchScopeButtonUI();
+  renderHistoryView();
+};
+
+/**
+ * สลับโหมดค้นหาเป็นทุกเดือนทันที
+ */
+window.toggleSearchScopeToAll = function() {
+  state.searchAllMonths = true;
+  updateSearchScopeButtonUI();
+  if (state.activeSearchHN) {
+    searchLocalMultiSheetCache(state.activeSearchHN);
+    renderHistoryView();
+    fetchRemoteSearchAllMonths(state.activeSearchHN);
+  } else {
+    renderHistoryView();
+  }
+};
+
+/**
+ * ค้นหาประวัติจาก LocalStorage Cache ครบทุกชีตแบบทันที (< 5ms)
+ */
+function searchLocalMultiSheetCache(query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) {
+    state.allMonthsResults = [];
+    return [];
+  }
+  
+  const matches = [];
+  const seenKeys = new Set();
+  
+  // 1. ตรวจในข้อมูลชีตปัจจุบันก่อน
+  if (Array.isArray(state.records)) {
+    state.records.forEach(r => {
+      const hn = String(r.HN || r.AN || "").toLowerCase();
+      if (hn.includes(q)) {
+        const itemCopy = { ...r, _sheetName: r._sheetName || state.currentSheet };
+        const uKey = `${itemCopy._sheetName}_${itemCopy.HN}_${itemCopy._rowIndex || ''}`;
+        if (!seenKeys.has(uKey)) {
+          seenKeys.add(uKey);
+          matches.push(itemCopy);
+        }
+      }
+    });
+  }
+  
+  // 2. ค้นใน LocalStorage Cache ของทุกเดือน
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("painApp_sheet_cache_")) {
+        const sName = key.replace("painApp_sheet_cache_", "");
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            list.forEach(r => {
+              const hn = String(r.HN || r.AN || "").toLowerCase();
+              if (hn.includes(q)) {
+                const itemCopy = normalizeRecord(r);
+                itemCopy._sheetName = r._sheetName || sName;
+                const uKey = `${itemCopy._sheetName}_${itemCopy.HN}_${itemCopy._rowIndex || ''}`;
+                if (!seenKeys.has(uKey)) {
+                  seenKeys.add(uKey);
+                  matches.push(itemCopy);
+                }
+              }
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {}
+  
+  state.allMonthsResults = matches;
+  return matches;
+}
+
+/**
+ * ค้นหาประวัติ HN ย้อนหลังทุกเดือนจาก Google Apps Script Backend
+ */
+async function fetchRemoteSearchAllMonths(query) {
+  const q = String(query || "").trim();
+  if (!q || !state.googleScriptUrl) return [];
+  
+  state.isSearchingAllMonths = true;
+  
+  try {
+    let result = null;
+    const url = `${state.googleScriptUrl}?action=search&hn=${encodeURIComponent(q)}&_t=${Date.now()}`;
+    try {
+      const res = await fetch(url);
+      result = await res.json();
+    } catch (e) {
+      result = await fetchJsonp(state.googleScriptUrl, { action: "search", hn: q });
+    }
+    
+    if (result && result.status === "success" && Array.isArray(result.data)) {
+      const serverRecords = result.data.map(r => normalizeRecord(r));
+      state.allMonthsResults = serverRecords;
+      renderHistoryView();
+      return serverRecords;
+    }
+  } catch (err) {
+    console.error("fetchRemoteSearchAllMonths error:", err);
+  } finally {
+    state.isSearchingAllMonths = false;
+  }
+  return [];
+}
+
+/**
+ * ตรวจสอบประวัติ HN ย้อนหลังทุกเดือน (จากฟอร์มบันทึก)
+ */
+async function checkHNHistory(hn) {
+  state.activeSearchHN = hn;
+  state.searchAllMonths = true;
+  updateSearchScopeButtonUI();
+  if (elements.searchANInput) elements.searchANInput.value = hn;
+  if (elements.inputHistorySearch) elements.inputHistorySearch.value = hn;
+  if (elements.btnClearHistorySearch) elements.btnClearHistorySearch.style.display = "flex";
+  
+  // ตรวจใน Cache ทุกเดือนทันที
+  searchLocalMultiSheetCache(hn);
+  
+  if (state.allMonthsResults.length > 0) {
+    const sheetSet = new Set(state.allMonthsResults.map(r => r._sheetName || state.currentSheet).filter(Boolean));
+    showToast(`พบประวัติเดิมของ HN ${hn} ย้อนหลัง ${state.allMonthsResults.length} รายการ (ใน ${sheetSet.size} เดือน)`, "info");
+    switchTab("history");
+    renderHistoryView();
+  } else {
+    showToast(`กำลังค้นหาประวัติ HN ${hn} จาก Google Sheets ทุกเดือน...`, "info");
+  }
+  
+  // ค้นหาจาก Google Sheets ทุกเดือน
+  try {
+    await fetchRemoteSearchAllMonths(hn);
+    if (state.allMonthsResults.length > 0) {
+      const sheetSet = new Set(state.allMonthsResults.map(r => r._sheetName || state.currentSheet).filter(Boolean));
+      showToast(`พบประวัติเดิมของ HN ${hn} ย้อนหลังทั้งหมด ${state.allMonthsResults.length} รายการ (ใน ${sheetSet.size} เดือน)`, "success");
+      switchTab("history");
+      renderHistoryView();
+    } else {
+      showToast(`ไม่พบประวัติเดิมของ HN ${hn} ในชีตทุกเดือน (สามารถลงข้อมูลเป็นคนไข้รายใหม่ได้ทันที)`, "success");
+    }
+  } catch (e) {
+    if (state.allMonthsResults.length === 0) {
+      showToast(`ไม่พบประวัติเดิมของ HN ${hn}`, "info");
+    }
+  }
+}
+
+/**
+ * ค้นหาประวัติ HN (จากกล่องค้นหา Sidebar หรือ History)
  */
 function executeSearch() {
   const q = (elements.searchANInput ? elements.searchANInput.value : "").trim();
   state.activeSearchHN = q;
+  if (elements.inputHistorySearch) elements.inputHistorySearch.value = q;
+  if (elements.btnClearHistorySearch) {
+    elements.btnClearHistorySearch.style.display = q ? "flex" : "none";
+  }
   switchTab("history");
-  renderHistoryView();
+  if (state.searchAllMonths) {
+    searchLocalMultiSheetCache(q);
+    renderHistoryView();
+    if (q) fetchRemoteSearchAllMonths(q);
+  } else {
+    renderHistoryView();
+  }
 }
 
 /**
@@ -775,13 +1000,14 @@ function renderHistoryView() {
   const container = elements.historyResultsContainer;
   if (!container) return;
   
-  let list = [...state.records];
+  const isSearchingAll = Boolean(state.activeSearchHN && state.searchAllMonths);
+  let list = isSearchingAll ? [...state.allMonthsResults] : [...state.records];
   
   // กรองแถวว่าง หรือแถวที่ไม่มี HN ออก (ป้องกันแถวหัวตารางหรือแถวเปล่า)
   list = list.filter(item => item && item.HN && item.HN !== "ไม่ระบุ" && item.HN !== "HN" && item._rowIndex !== 2);
   
-  // 1. กรองตาม Search HN
-  if (state.activeSearchHN) {
+  // 1. กรองตาม Search HN (ถ้าเป็นโหมดชีตปัจจุบัน)
+  if (!isSearchingAll && state.activeSearchHN) {
     const q = state.activeSearchHN.toLowerCase();
     list = list.filter(item => {
       const hn = String(item["HN"] || item["AN"] || "").toLowerCase();
@@ -806,27 +1032,50 @@ function renderHistoryView() {
   
   // Header bar
   if (elements.historySearchTitle) {
-    const totalInSheet = state.records.length;
-    const sheetName = state.currentSheet || "ข้อมูลปัจจุบัน";
-    elements.historySearchTitle.innerHTML = `
-      <div>
-        <h4 style="font-size:1.05rem; font-weight:700; color:#1e1b4b; display:flex; align-items:center; gap:8px;">
-          <i class="fa-regular fa-folder-open" style="color:#4f46e5;"></i> ชีต: ${sheetName}
-        </h4>
-        <span style="font-size:0.8rem; color:#64748b;">
-          ${state.activeSearchHN ? `ผลการค้นหา HN: <strong>${state.activeSearchHN}</strong> (${list.length} รายการ)` : `ผู้ป่วยทั้งหมดในชีตนี้ ${totalInSheet} รายการ`}
-        </span>
-      </div>
-      <div>
-        <button class="btn-primary" style="padding:6px 14px; font-size:0.82rem;" onclick="switchTab('form')">
-          <i class="fa-solid fa-plus"></i> บันทึกคนไข้ใหม่
-        </button>
-      </div>
-    `;
+    if (isSearchingAll) {
+      const sheetSet = new Set(list.map(r => r._sheetName || state.currentSheet).filter(Boolean));
+      const sheetCount = sheetSet.size;
+      elements.historySearchTitle.innerHTML = `
+        <div class="search-all-banner">
+          <div class="sab-left">
+            <div class="sab-tag"><i class="fa-solid fa-clock-rotate-left"></i> ค้นหาประวัติย้อนหลังทุกเดือน</div>
+            <h4 class="sab-heading">ผู้ป่วย HN: <strong>${state.activeSearchHN}</strong></h4>
+            <p class="sab-sub">พบประวัติการประเมิน <strong>${list.length}</strong> รายการ จากทั้งหมด <strong>${sheetCount}</strong> เดือน/ชีต</p>
+          </div>
+          <div class="sab-right">
+            <button type="button" class="btn-reset-scope" onclick="resetSearchToCurrentSheet()">
+              <i class="fa-solid fa-calendar-day"></i> กลับดูชีตเดือนปัจจุบัน (${state.currentSheet})
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      const totalInSheet = state.records.length;
+      const sheetName = state.currentSheet || "ข้อมูลปัจจุบัน";
+      elements.historySearchTitle.innerHTML = `
+        <div>
+          <h4 style="font-size:1.05rem; font-weight:700; color:#1e1b4b; display:flex; align-items:center; gap:8px;">
+            <i class="fa-regular fa-folder-open" style="color:#4f46e5;"></i> ชีต: ${sheetName}
+          </h4>
+          <span style="font-size:0.8rem; color:#64748b;">
+            ${state.activeSearchHN ? `ผลการค้นหา HN: <strong>${state.activeSearchHN}</strong> (${list.length} รายการ)` : `ผู้ป่วยทั้งหมดในชีตนี้ ${totalInSheet} รายการ`}
+          </span>
+        </div>
+        <div>
+          <button class="btn-primary" style="padding:6px 14px; font-size:0.82rem;" onclick="switchTab('form')">
+            <i class="fa-solid fa-plus"></i> บันทึกคนไข้ใหม่
+          </button>
+        </div>
+      `;
+    }
   }
   
   if (elements.historyShowingSummary) {
-    elements.historyShowingSummary.textContent = `แสดง ${list.length} จากทั้งหมด ${state.records.length} คนไข้`;
+    if (isSearchingAll) {
+      elements.historyShowingSummary.textContent = `แสดงประวัติย้อนหลัง ${list.length} รายการ`;
+    } else {
+      elements.historyShowingSummary.textContent = `แสดง ${list.length} จากทั้งหมด ${state.records.length} คนไข้`;
+    }
   }
   
   // แสดงผลกรณีไม่พบข้อมูล
@@ -834,11 +1083,20 @@ function renderHistoryView() {
     container.innerHTML = `
       <div style="text-align:center; padding:36px 16px; background:#f8fafc; border-radius:12px; border:1px dashed #cbd5e1;">
         <i class="fa-regular fa-folder-open" style="font-size:2rem; color:#94a3b8; margin-bottom:10px; display:block;"></i>
-        <p style="font-weight:700; font-size:1rem; color:#475569;">ไม่พบข้อมูลผู้ป่วยที่ค้นหา</p>
-        <p style="font-size:0.85rem; color:#94a3b8; margin-top:4px;">กรุณาตรวจสอบเลข HN หรือสลับดู Work Sheet ประจำเดือนอื่น</p>
-        <button class="btn-primary" style="margin-top:14px;" onclick="switchTab('form')">
-          <i class="fa-solid fa-plus"></i> เริ่มบันทึก HN ใหม่
-        </button>
+        <p style="font-weight:700; font-size:1rem; color:#475569;">ไม่พบข้อมูลผู้ป่วยที่ค้นหา ${state.activeSearchHN ? `(HN: ${state.activeSearchHN})` : ''}</p>
+        <p style="font-size:0.85rem; color:#94a3b8; margin-top:4px;">
+          ${isSearchingAll ? 'ค้นหาในทุกชีต/ทุกเดือนแล้ว ไม่พบข้อมูลประวัติเดิม' : 'สามารถกดปุ่ม "ทุกเดือน" เพื่อค้นหาย้อนหลังข้ามทุกชีตได้'}
+        </p>
+        <div style="margin-top:14px; display:flex; justify-content:center; gap:8px; flex-wrap:wrap;">
+          ${!isSearchingAll && state.activeSearchHN ? `
+            <button class="btn-secondary" onclick="toggleSearchScopeToAll()">
+              <i class="fa-solid fa-clock-rotate-left"></i> ค้นหาต่อในทุกเดือนย้อนหลัง
+            </button>
+          ` : ''}
+          <button class="btn-primary" onclick="switchTab('form')">
+            <i class="fa-solid fa-plus"></i> เริ่มบันทึก HN ใหม่
+          </button>
+        </div>
       </div>
     `;
     return;
@@ -893,6 +1151,8 @@ function renderCardView(list, container) {
                 </button>
               </div>
               <div class="p-sub-meta">
+                <span class="p-sheet-badge"><i class="fa-regular fa-folder-open"></i> ชีต: ${item._sheetName || state.currentSheet}</span>
+                <span class="p-dot">•</span>
                 <span class="p-row-idx">ลำดับ #${rowNum}</span>
                 <span class="p-dot">•</span>
                 <span class="p-tool-tag">${toolDisplay}</span>
@@ -1051,6 +1311,7 @@ function renderSpreadsheetTableView(list, container) {
         <thead>
           <tr>
             <th>ลำดับ</th>
+            <th>ชีต/เดือน</th>
             <th>HN</th>
             <th>Tool</th>
             <th>แรกรับ:ปรอท</th>
@@ -1079,6 +1340,7 @@ function renderSpreadsheetTableView(list, container) {
     html += `
       <tr class="${isSevere ? 'row-severe' : ''}">
         <td style="font-weight:700; color:#64748b;">${rowNum}</td>
+        <td><span class="sheet-name-badge">${item._sheetName || state.currentSheet || '-'}</span></td>
         <td><span class="hn-tag">${hn}</span></td>
         <td>${item["Tool"] || "-"}</td>
         <td><span class="${badgeTagClass(item["Pain แรกรับ : ฟอร์มปรอท"])}">${item["Pain แรกรับ : ฟอร์มปรอท"] || "-"}</span></td>
@@ -1119,10 +1381,13 @@ function badgeTagClass(val, isSevereColumn = false) {
 }
 
 function updateFilterChipCounts() {
-  const all = state.records.length;
-  const severe = state.records.filter(r => String(r["Pain ≥ 5**"]).toUpperCase() === "YES").length;
-  const surgery = state.records.filter(r => String(r["Operation Surgery"]).toUpperCase() === "YES").length;
-  const incomplete = state.records.filter(r => 
+  const isSearchingAll = Boolean(state.activeSearchHN && state.searchAllMonths);
+  const baseList = isSearchingAll ? state.allMonthsResults : state.records;
+  
+  const all = baseList.length;
+  const severe = baseList.filter(r => String(r["Pain ≥ 5**"]).toUpperCase() === "YES").length;
+  const surgery = baseList.filter(r => String(r["Operation Surgery"]).toUpperCase() === "YES").length;
+  const incomplete = baseList.filter(r => 
     String(r["Pain แรกรับ : ฟอร์มปรอท"]).toUpperCase() !== "YES" || 
     String(r["Pain แรกรับ : Nurse note"]).toUpperCase() !== "YES"
   ).length;

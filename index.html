@@ -165,7 +165,7 @@
         <!-- Quick Search HN Card -->
         <section class="search-widget-card" id="sidebarSearchCard">
           <h4><i class="fa-solid fa-magnifying-glass" style="color:#4f46e5;"></i> ค้นหาประวัติผู้ป่วย</h4>
-          <p>กรอกเลข HN เพื่อค้นหาประวัติการประเมินในชีต</p>
+          <p>กรอกเลข HN เพื่อค้นหาประวัติการประเมินย้อนหลังทุกเดือน</p>
           
           <div class="search-input-group">
             <input type="text" id="searchANInput" class="search-input" placeholder="กรอกเลข HN เช่น 1292565">
@@ -179,7 +179,7 @@
             </div>
           </div>
           <small style="color:#94a3b8; font-size:0.75rem;">
-            * สามารถกดปุ่มที่การ์ดเพื่อนำ HN มาลงบันทึกต่อได้ทันที
+            * รองรับค้นหาประวัติย้อนหลังทุกรายการ ทุกเดือนอัตโนมัติ
           </small>
         </section>
 
@@ -420,10 +420,16 @@
                 </div>
 
                 <div class="history-search-row">
-                  <i class="fa-solid fa-search search-icon-inside"></i>
-                  <input type="text" id="inputHistorySearch" class="history-search-input" placeholder="ค้นหา HN เช่น 1468978">
-                  <button type="button" id="btnClearHistorySearch" class="btn-clear-inside" title="ล้างค่าค้นหา" style="display:none;">
-                    <i class="fa-solid fa-xmark"></i>
+                  <div class="search-input-wrapper">
+                    <i class="fa-solid fa-search search-icon-inside"></i>
+                    <input type="text" id="inputHistorySearch" class="history-search-input" placeholder="ค้นหา HN ย้อนหลัง เช่น 1468978">
+                    <button type="button" id="btnClearHistorySearch" class="btn-clear-inside" title="ล้างค่าค้นหา" style="display:none;">
+                      <i class="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+                  <button type="button" id="btnToggleSearchScope" class="btn-search-scope active" title="สลับการค้นหา: ทุกเดือนย้อนหลัง หรือ เฉพาะเดือนนี้">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span id="searchScopeText">ทุกเดือน</span>
                   </button>
                 </div>
               </div>

@@ -118,21 +118,49 @@ function doGet(e) {
       return createJsonResponse(responsePayload, callback);
     }
     
-    // 3. ค้นหาตาม HN/AN
-    if (action === "search") {
+    // 3. ค้นหาประวัติ HN/AN ย้อนหลังทุกชีตประจำเดือน (Search Across All Months)
+    if (action === "search" || action === "searchAll") {
       const ss = getSpreadsheet();
       const sheetList = getSheetNames(ss);
-      const q = ((e.parameter && (e.parameter.an || e.parameter.hn)) || "").trim().toLowerCase();
-      let sheet = targetSheetName ? ss.getSheetByName(targetSheetName) : null;
-      if (!sheet && sheetList.length > 0) sheet = ss.getSheetByName(sheetList[0]);
-      if (!sheet) sheet = ss.getSheets()[0];
+      const q = ((e.parameter && (e.parameter.an || e.parameter.hn || e.parameter.q)) || "").trim().toLowerCase();
+      const searchTargetSheet = (e.parameter && (e.parameter.sheet || e.parameter.sheetName)) || "";
       
-      const allData = parseHospitalSheet(sheet);
-      const filtered = allData.filter(item => {
-        const itemHn = String(item["HN"] || item["AN"] || "").trim().toLowerCase();
-        return itemHn === q || itemHn.includes(q);
-      });
-      return createJsonResponse({ status: "success", query: q, count: filtered.length, data: filtered }, callback);
+      let allMatches = [];
+      
+      // กรณีระบุชีตเป้าหมาย
+      if (searchTargetSheet) {
+        const sheet = ss.getSheetByName(searchTargetSheet);
+        if (sheet) {
+          const data = parseHospitalSheet(sheet);
+          allMatches = data.filter(item => {
+            const itemHn = String(item["HN"] || item["AN"] || "").trim().toLowerCase();
+            return q ? (itemHn === q || itemHn.includes(q)) : true;
+          });
+        }
+      } else {
+        // ค้นหาประวัติย้อนหลังทุกเดือนในทุกชีต!
+        for (let s = 0; s < sheetList.length; s++) {
+          const sName = sheetList[s];
+          const sheet = ss.getSheetByName(sName);
+          if (!sheet) continue;
+          
+          const data = parseHospitalSheet(sheet);
+          const matched = data.filter(item => {
+            const itemHn = String(item["HN"] || item["AN"] || "").trim().toLowerCase();
+            return q ? (itemHn === q || itemHn.includes(q)) : true;
+          });
+          allMatches = allMatches.concat(matched);
+        }
+      }
+      
+      return createJsonResponse({ 
+        status: "success", 
+        query: q, 
+        searchedAllMonths: !searchTargetSheet,
+        totalSheetsSearched: searchTargetSheet ? 1 : sheetList.length,
+        count: allMatches.length, 
+        data: allMatches 
+      }, callback);
     }
     
     return createJsonResponse({ status: "error", message: "Unknown action" }, callback);
