@@ -1529,7 +1529,7 @@ body {
     gap: 10px;
   }
   
-  .btn-submit, .btn-secondary {
+  .form-actions .btn-submit, .form-actions .btn-secondary {
     width: 100%;
     padding: 13px 18px;
     font-size: 1rem;
@@ -1550,3 +1550,248 @@ body {
     font-size: 1.25rem;
   }
 }
+
+/* ========================================================
+   Hospital Spreadsheet & Data View Enhanced Styles
+   ======================================================== */
+
+.text-yes {
+  color: #059669 !important;
+  font-weight: 700;
+}
+
+.text-no {
+  color: #dc2626 !important;
+  font-weight: 600;
+}
+
+.text-muted-val {
+  color: #94a3b8;
+}
+
+/* Filter Chips Bar */
+.filter-chips-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 12px 2px;
+  margin-bottom: 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.filter-chips-container::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.filter-chip:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.filter-chip.active {
+  background: #4f46e5;
+  color: white;
+  border-color: #4f46e5;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+}
+
+.filter-chip .chip-count {
+  background: rgba(0,0,0,0.08);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+}
+
+.filter-chip.active .chip-count {
+  background: rgba(255,255,255,0.25);
+  color: white;
+}
+
+/* View Mode Toggler (Cards vs Sheet Table) */
+.view-mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.view-toggle-group {
+  display: inline-flex;
+  background: #e2e8f0;
+  border-radius: var(--radius-full);
+  padding: 3px;
+  gap: 2px;
+}
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.view-toggle-btn.active {
+  background: white;
+  color: #1e1b4b;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Hospital Spreadsheet Table View */
+.sheet-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: white;
+  box-shadow: var(--shadow-sm);
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.sheet-table th {
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 700;
+  padding: 10px 12px;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.sheet-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #f1f5f9;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.sheet-table tr:hover {
+  background: #f8fafc;
+}
+
+.sheet-table tr.row-severe {
+  background: #fff7ed;
+}
+
+.sheet-table tr.row-severe:hover {
+  background: #ffedd5;
+}
+
+.badge-tag-yes {
+  display: inline-block;
+  padding: 2px 7px;
+  background: #dcfce7;
+  color: #15803d;
+  font-weight: 700;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.badge-tag-no {
+  display: inline-block;
+  padding: 2px 7px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-weight: 600;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.badge-tag-dash {
+  color: #cbd5e1;
+}
+
+/* HN Pill / Badge in Table & Cards */
+.hn-tag {
+  font-family: monospace;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  font-size: 0.9rem;
+}
+
+/* Progress bar in dashboard */
+.qa-metric-row {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.qa-metric-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.qa-metric-title {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #1e293b;
+}
+
+.qa-metric-pct {
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.qa-progress-bg {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.qa-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+

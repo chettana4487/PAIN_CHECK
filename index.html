@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ระบบตรวจสอบและบันทึกอาการปวดคนไข้ (Pain Care Record)</title>
+  <title>ระบบตรวจสอบและบันทึกอาการปวดคนไข้ (Pain Assessment Tracker)</title>
   
   <!-- Favicon and App Icon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🩺</text></svg>">
@@ -27,13 +27,13 @@
         <button class="modal-close-btn" id="btnCloseModal">&times;</button>
       </div>
       <div style="font-size:0.88rem; color:#475569; margin-bottom:14px; line-height:1.6;">
-        ระบบจะบันทึกข้อมูลเข้าสู่ Google Sheet แบบ Real-time ผ่าน Google Apps Script Web App
+        ระบบจะดึงและบันทึกข้อมูลเข้าสู่ Google Sheet แบบ Real-time ผ่าน Google Apps Script Web App
       </div>
       <div class="form-group" style="margin-bottom:16px;">
         <label class="form-label">Google Apps Script Web App URL:</label>
         <input type="url" id="scriptUrlInput" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
         <small style="color:#64748b; font-size:0.75rem; margin-top:4px; display:block;">
-          ดูวิธีติดตั้งในไฟล์ <code>google-apps-script.js</code> หรือคัดลอกโค้ดไปวางในชีตของท่าน
+          คัดลอกโค้ดจากไฟล์ <code>google-apps-script.js</code> ไปวางใน Apps Script แล้วกด Deploy เป็น Web App
         </small>
       </div>
       
@@ -50,11 +50,11 @@
 
   <div class="app-container">
     
-    <!-- Top Header Banner (ตามแบบภาพตัวอย่าง) -->
+    <!-- Top Header Banner -->
     <header class="app-header">
       <div class="header-top">
         <span class="badge-tag">
-          <span class="pulse-dot"></span> Pain care record
+          <span class="pulse-dot"></span> Pain Assessment Tracker
         </span>
         <div class="header-actions">
           <button class="icon-btn" id="btnOpenSettings" title="ตั้งค่าเชื่อมต่อ Google Sheet">
@@ -63,36 +63,35 @@
         </div>
       </div>
       <h1 class="header-title">
-        <i class="fa-solid fa-heart-pulse"></i> แบบฟอร์มประเมิน Pain
+        <i class="fa-solid fa-heart-pulse"></i> ระบบติดตามการประเมินอาการปวด
       </h1>
-      <p class="header-desc">บันทึก ติดตาม และค้นหาประวัติการประเมิน Pain สำหรับหอผู้ป่วยและทีมการพยาบาล</p>
+      <p class="header-desc">บันทึก ติดตาม และประเมินคุณภาพการจัดการความปวดผู้ป่วย เชื่อมต่อ Google Sheet</p>
     </header>
 
-    <!-- Sub Intro Banner (เฉพาะจอกว้าง/คอมพิวเตอร์ เพื่อไม่ให้เกะกะจอมือถือ) -->
+    <!-- Sub Intro Banner (Desktop Only) -->
     <div class="hero-banner desktop-only">
       <div class="hero-text">
-        <h3>แบบฟอร์มประเมิน Pain</h3>
+        <h3>บันทึกและตรวจสอบคุณภาพความปวด (Pain QA)</h3>
         <p>
-          กรอกข้อมูลเพื่อบันทึกลง Google Sheet หากต้องการดูข้อมูลย้อนหลัง ให้เลือกแท็บ 
-          <strong>"ประวัติ AN"</strong>
+          ระบบเชื่อมต่อตรงกับชีตรายเดือนของโรงพยาบาล สามารถเลือกดูข้อมูลรายเดือน หรือเริ่มลงข้อมูลผู้ป่วยใหม่ได้ทันที
         </p>
       </div>
       <button class="btn-primary" onclick="switchTab('form')">
-        <i class="fa-solid fa-pen-to-square"></i> เริ่มกรอกแบบฟอร์ม
+        <i class="fa-solid fa-pen-to-square"></i> เริ่มบันทึกคนไข้ใหม่
       </button>
     </div>
 
-    <!-- Navigation Tabs (แบบฟอร์ม, ประวัติ AN, สรุปผล) -->
+    <!-- Navigation Tabs -->
     <div class="nav-tabs-wrapper">
       <nav class="nav-tabs">
         <button class="nav-tab-btn active" data-tab-target="form">
-          <i class="fa-solid fa-file-waveform"></i> แบบฟอร์ม
+          <i class="fa-solid fa-file-signature"></i> แบบฟอร์มบันทึก
         </button>
         <button class="nav-tab-btn" data-tab-target="history">
-          <i class="fa-solid fa-clock-rotate-left"></i> ประวัติ AN
+          <i class="fa-solid fa-table-list"></i> ข้อมูลประเมิน (HN)
         </button>
         <button class="nav-tab-btn" data-tab-target="dashboard">
-          <i class="fa-solid fa-chart-pie"></i> สรุปผล
+          <i class="fa-solid fa-chart-pie"></i> ตัวชี้วัด QA
         </button>
       </nav>
     </div>
@@ -100,24 +99,24 @@
     <!-- Grid Container: Left column (Summary & Search) | Right column (Form / History / Analytics) -->
     <div class="main-grid">
       
-      <!-- LEFT SIDEBAR: แสดงบน Desktop หรือเมื่อเปิดแท็บที่เกี่ยวข้อง -->
+      <!-- LEFT SIDEBAR -->
       <aside class="left-sidebar" id="leftSidebar">
         
-        <!-- Summary KPI Card (จะแสดงใน sidebar บนจอคอม หรือในแท็บสรุปผลบนมือถือ) -->
+        <!-- Summary KPI Card -->
         <section class="summary-card" id="sidebarSummaryCard">
           <div class="summary-header">
             <h3 class="summary-title">
-              <i class="fa-solid fa-chart-simple" style="color:#6366f1;"></i> ภาพรวมการประเมิน
+              <i class="fa-solid fa-chart-simple" style="color:#6366f1;"></i> สถิติประจำเดือน
             </h3>
             <span class="sync-status" id="syncStatusText">
-              <i class="fa-solid fa-database"></i> ออฟไลน์ / เครื่อง
+              <i class="fa-solid fa-database"></i> ข้อมูลตัวอย่าง
             </span>
           </div>
 
           <!-- ตัวเลือก Work Sheet / ประจำเดือน -->
           <div class="sheet-selector-box">
             <label for="selectSheetMonth" class="sheet-selector-label">
-              <i class="fa-regular fa-calendar-days" style="color:#4f46e5;"></i> Work Sheet / เดือน:
+              <i class="fa-regular fa-calendar-days" style="color:#4f46e5;"></i> Work Sheet ประจำเดือน:
             </label>
             <div style="display:flex; gap:6px;">
               <select id="selectSheetMonth" class="form-select sheet-month-select">
@@ -131,21 +130,27 @@
 
           <div class="kpi-scroll-container">
             <div class="kpi-item total">
-              <span class="kpi-label">รายการทั้งหมด</span>
+              <span class="kpi-label">ผู้ป่วยทั้งหมด</span>
               <span class="kpi-value" id="kpiTotal">0</span>
               <div class="kpi-bar" style="background:#6366f1;"></div>
             </div>
 
             <div class="kpi-item pain-first">
-              <span class="kpi-label">Pain แรกรับ YES</span>
+              <span class="kpi-label">Pain แรกรับ (YES, YES)</span>
               <span class="kpi-value" id="kpiPainFirst">0</span>
               <div class="kpi-bar" style="background:#ec4899;"></div>
             </div>
 
             <div class="kpi-item pain-q8">
-              <span class="kpi-label">Pain q 8 hr YES</span>
+              <span class="kpi-label">Pain q 8 hr (YES, YES)</span>
               <span class="kpi-value" id="kpiPainQ8">0</span>
               <div class="kpi-bar" style="background:#8b5cf6;"></div>
+            </div>
+
+            <div class="kpi-item over5">
+              <span class="kpi-label">Pain ≥ 5 (ปวดรุนแรง)</span>
+              <span class="kpi-value" id="kpiPainOver5">0</span>
+              <div class="kpi-bar" style="background:#ef4444;"></div>
             </div>
 
             <div class="kpi-item op">
@@ -155,37 +160,31 @@
             </div>
 
             <div class="kpi-item guide">
-              <span class="kpi-label">Guideline Post-op</span>
+              <span class="kpi-label">ตามแนวปฏิบัติผ่าตัด</span>
               <span class="kpi-value" id="kpiGuideline">0</span>
               <div class="kpi-bar" style="background:#10b981;"></div>
-            </div>
-
-            <div class="kpi-item over5">
-              <span class="kpi-label">Pain ≥ 5</span>
-              <span class="kpi-value" id="kpiPainOver5">0</span>
-              <div class="kpi-bar" style="background:#ef4444;"></div>
             </div>
           </div>
         </section>
 
-        <!-- Quick Search AN Card (แสดงบน sidebar จอคอม หรือในแท็บประวัติบนมือถือ) -->
+        <!-- Quick Search HN Card -->
         <section class="search-widget-card" id="sidebarSearchCard">
-          <h4><i class="fa-solid fa-magnifying-glass" style="color:#4f46e5;"></i> ค้นหาประวัติการประเมิน</h4>
-          <p>ค้นหาด้วย AN เพื่อดูประวัติเดิมทั้งหมด เรียงจากล่าสุดไปเก่าสุด</p>
+          <h4><i class="fa-solid fa-magnifying-glass" style="color:#4f46e5;"></i> ค้นหาประวัติผู้ป่วย</h4>
+          <p>กรอกเลข HN เพื่อค้นหาประวัติการประเมินในชีต</p>
           
           <div class="search-input-group">
-            <input type="text" id="searchANInput" class="search-input" placeholder="กรอกเลข AN เช่น 67001234">
+            <input type="text" id="searchANInput" class="search-input" placeholder="กรอกเลข HN เช่น 1292565">
             <div class="search-btn-group">
               <button class="btn-search" id="btnSearchAN" title="ค้นหาประวัติ">
                 <i class="fa-solid fa-search"></i> ค้นหา
               </button>
               <button class="btn-clear-search" id="btnClearSearch" title="ล้างค่าค้นหา">
-                <i class="fa-solid fa-rotate-right"></i> ล้างค่า
+                <i class="fa-solid fa-rotate-right"></i> ล้าง
               </button>
             </div>
           </div>
           <small style="color:#94a3b8; font-size:0.75rem;">
-            * เมื่อพบประวัติแล้ว สามารถกดปุ่มเพื่อบันทึกประเมินรอบใหม่ต่อได้ทันที
+            * สามารถกดปุ่มที่การ์ดเพื่อนำ HN มาลงบันทึกต่อได้ทันที
           </small>
         </section>
 
@@ -194,7 +193,7 @@
       <!-- RIGHT MAIN CONTENT AREA -->
       <main class="main-content">
 
-        <!-- TAB 1: FORM VIEW -->
+        <!-- TAB 1: FORM VIEW (บันทึกข้อมูลสอดคล้องกับคอลัมน์ A-N ใน Google Sheet) -->
         <section id="panelForm" class="tab-panel">
           <div class="form-card">
             
@@ -203,59 +202,45 @@
                 <i class="fa-solid fa-notes-medical"></i>
               </div>
               <div class="form-card-header-text">
-                <h3>บันทึกผลการประเมินใหม่</h3>
-                <p>ทุกครั้งที่บันทึก ระบบจะเก็บเป็นประวัติรายการใหม่ โดยไม่เขียนทับข้อมูลเดิม</p>
+                <h3>บันทึกการประเมินความปวดผู้ป่วย</h3>
+                <p>บันทึกแถวใหม่เข้าสู่ Google Sheet ประจำเดือนตามโครงสร้างคอลัมน์จริง</p>
               </div>
             </div>
 
             <form id="painForm" autocomplete="off">
               
-              <!-- 1. ข้อมูลทั่วไป -->
+              <!-- 1. ข้อมูลผู้ป่วยและเครื่องมือ -->
               <div class="form-section general">
                 <div class="form-section-title">
-                  <i class="fa-solid fa-address-card"></i> ข้อมูลทั่วไป
+                  <i class="fa-solid fa-id-card"></i> ข้อมูลผู้ป่วยและชีตเป้าหมาย
                 </div>
                 
-                <div class="form-grid-2">
-                  <div class="form-group">
-                    <label class="form-label">วันที่และเวลา <span class="req-star">*</span></label>
-                    <input type="datetime-local" id="inputDatetime" class="form-input" required>
-                  </div>
-                  
-                  <div class="form-group">
-                    <label class="form-label">ผู้บันทึก <span class="req-star">*</span></label>
-                    <input type="text" id="inputRecorder" class="form-input" placeholder="ชื่อ-สกุล หรือ รหัสพยาบาล" required>
-                  </div>
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label class="form-label">
+                    <i class="fa-regular fa-folder-open" style="color:#4f46e5;"></i> บันทึกลง Work Sheet ประจำเดือน: <span class="req-star">*</span>
+                  </label>
+                  <select id="formTargetSheet" class="form-select" style="background:#f8fafc; font-weight:600;">
+                    <!-- Generated by JS -->
+                  </select>
                 </div>
 
-                <div class="form-grid-3" style="margin-top:12px;">
+                <div class="form-grid-2">
                   <div class="form-group">
-                    <label class="form-label">AN (Admission Number) <span class="req-star">*</span></label>
-                    <input type="text" id="inputAN" class="form-input" placeholder="เลข AN ผู้ป่วย" required>
+                    <label class="form-label">HN ผู้ป่วย (เลขประจำตัว) <span class="req-star">*</span></label>
+                    <div style="display:flex; gap:8px;">
+                      <input type="text" id="inputAN" class="form-input" placeholder="เลข HN เช่น 1292565" required style="flex:1; min-width:0; font-weight:700; letter-spacing:0.5px;">
+                      <button type="button" class="btn-secondary" id="btnQuickCheckHN" title="ตรวจประวัติเดิม" style="padding:0 14px; flex-shrink:0; white-space:nowrap; font-size:0.85rem;">
+                        <i class="fa-solid fa-search"></i> ตรวจ
+                      </button>
+                    </div>
                   </div>
 
                   <div class="form-group">
-                    <label class="form-label">หน่วยงาน / หอผู้ป่วย <span class="req-star">*</span></label>
-                    <select id="selectWard" class="form-select" required>
-                      <!-- Generated by JS -->
-                    </select>
-                  </div>
-
-                  <div class="form-group">
-                    <label class="form-label">Tool การประเมิน <span class="req-star">*</span></label>
+                    <label class="form-label">Tool เครื่องมือประเมิน <span class="req-star">*</span></label>
                     <select id="selectTool" class="form-select" required>
                       <!-- Generated by JS -->
                     </select>
                   </div>
-                </div>
-
-                <div class="form-group" style="margin-top:10px;">
-                  <label class="form-label">
-                    <i class="fa-regular fa-folder-open" style="color:#4f46e5;"></i> บันทึกลง Work Sheet เดือน:
-                  </label>
-                  <select id="formTargetSheet" class="form-select" style="background:#f8fafc;">
-                    <!-- Generated by JS -->
-                  </select>
                 </div>
               </div>
 
@@ -277,7 +262,7 @@
                   </div>
 
                   <div class="form-group">
-                    <label class="form-label">Pain แรกรับ : Nurse note <span class="req-star">*</span></label>
+                    <label class="form-label">Pain แรกรับ : Nurse Note <span class="req-star">*</span></label>
                     <select id="painInitialNote" class="form-select" required>
                       <option value="YES">YES</option>
                       <option value="NO">NO</option>
@@ -291,16 +276,21 @@
                     <i class="fa-solid fa-clock"></i> Pain q 8 hr
                   </div>
 
-                  <div class="form-group">
+                  <div class="form-group" style="margin-bottom:10px;">
                     <label class="form-label">Pain q 8 hr : ฟอร์มปรอท <span class="req-star">*</span></label>
                     <select id="painQ8Thermo" class="form-select" required>
                       <option value="YES">YES</option>
                       <option value="NO">NO</option>
                     </select>
                   </div>
-                  <small style="color:#6b21a8; font-size:0.75rem; margin-top:8px; display:block;">
-                    * ติดตามประเมินอาการปวดซ้ำทุก 8 ชั่วโมง
-                  </small>
+
+                  <div class="form-group">
+                    <label class="form-label">Pain q 8 hr : Nurse Note <span class="req-star">*</span></label>
+                    <select id="painQ8Note" class="form-select" required>
+                      <option value="YES">YES</option>
+                      <option value="NO">NO</option>
+                    </select>
+                  </div>
                 </div>
 
               </div>
@@ -308,18 +298,18 @@
               <!-- 3. เงื่อนไขของ Pain ≥ 5 -->
               <div class="form-section pain-alert" id="sectionPainAlert">
                 <div class="form-section-title">
-                  <i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5**
+                  <i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5** (อาการปวดรุนแรง)
                 </div>
                 <span class="section-hint">
-                  เมื่อเลือก YES กรุณาระบุ Intervention และ Re-assessment (หากเลือก NO ช่องจะปิดเป็นสีเทา)
+                  เมื่อเลือก YES กรุณาระบุ Intervention และ Re-assessment (หากเลือก NO ระบบจะลงค่าเป็น - ให้โดยอัตโนมัติ)
                 </span>
 
                 <div class="form-grid-3">
                   <div class="form-group">
                     <label class="form-label">Pain ≥ 5** <span class="req-star">*</span></label>
                     <select id="painOver5Select" class="form-select" required>
-                      <option value="NO">NO</option>
-                      <option value="YES">YES</option>
+                      <option value="NO">NO (ไม่ถึง 5)</option>
+                      <option value="YES">YES (ตั้งแต่ 5 ขึ้นไป)</option>
                     </select>
                   </div>
 
@@ -353,8 +343,8 @@
                 <div class="form-group" style="max-width:280px; margin-bottom:12px;">
                   <label class="form-label">Operation Surgery <span class="req-star">*</span></label>
                   <select id="selectSurgery" class="form-select" required>
-                    <option value="NO">NO</option>
-                    <option value="YES">YES</option>
+                    <option value="NO">NO (ไม่ใช่เคสผ่าตัด)</option>
+                    <option value="YES">YES (เคสผ่าตัด)</option>
                   </select>
                 </div>
 
@@ -391,8 +381,8 @@
                   <i class="fa-regular fa-comment-dots"></i> หมายเหตุ
                 </div>
                 <div class="form-group">
-                  <label class="form-label">รายละเอียดเพิ่มเติม (ถ้ามี):</label>
-                  <textarea id="inputRemarks" class="form-textarea" rows="2" placeholder="เช่น อาการแสดง ตำแหน่งปวด ยาที่ได้รับ หรือข้อสังเกตเพิ่มเติม"></textarea>
+                  <label class="form-label">ข้อสังเกตเพิ่มเติม (ถ้ามี):</label>
+                  <textarea id="inputRemarks" class="form-textarea" rows="2" placeholder="เช่น ตำแหน่งปวด ยาที่ให้ หรือข้อสังเกตเพิ่มเติม"></textarea>
                 </div>
               </div>
 
@@ -402,7 +392,7 @@
                   <i class="fa-solid fa-rotate-left"></i> ล้างฟอร์ม
                 </button>
                 <button type="submit" class="btn-submit" id="btnSubmit">
-                  <i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูล
+                  <i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูลลง Google Sheet
                 </button>
               </div>
 
@@ -410,32 +400,73 @@
           </div>
         </section>
 
-        <!-- TAB 2: HISTORY VIEW (ค้นหา_AN) -->
+        <!-- TAB 2: DATA & HISTORY VIEW (ข้อมูลผู้ป่วยในชีต) -->
         <section id="panelHistory" class="tab-panel hidden">
           <div class="history-container">
             <div class="history-card">
+              
+              <!-- History Header Bar -->
               <div class="history-header-box" id="historySearchTitle">
-                <!-- Title & Add button dynamic -->
+                <!-- Title & Actions dynamically generated -->
+              </div>
+
+              <!-- Filter Chips -->
+              <div class="filter-chips-container" id="filterChipsBar">
+                <button class="filter-chip active" data-filter="all">
+                  <i class="fa-solid fa-list-check"></i> ทั้งหมด <span class="chip-count" id="countAll">0</span>
+                </button>
+                <button class="filter-chip" data-filter="severe">
+                  <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;"></i> Pain ≥ 5 <span class="chip-count" id="countSevere">0</span>
+                </button>
+                <button class="filter-chip" data-filter="surgery">
+                  <i class="fa-solid fa-syringe" style="color:#0284c7;"></i> ผ่าตัด (Surgery) <span class="chip-count" id="countSurgery">0</span>
+                </button>
+                <button class="filter-chip" data-filter="incomplete">
+                  <i class="fa-solid fa-circle-exclamation" style="color:#f59e0b;"></i> แรกรับไม่ครบ <span class="chip-count" id="countIncomplete">0</span>
+                </button>
+              </div>
+
+              <!-- View Mode Toggler -->
+              <div class="view-mode-bar">
+                <div style="font-size:0.85rem; color:#64748b;" id="historyShowingSummary">
+                  กำลังแสดงรายการ
+                </div>
+                <div class="view-toggle-group">
+                  <button class="view-toggle-btn active" id="btnViewCards" title="มุมมองการ์ด (อ่านง่ายบนมือถือ)">
+                    <i class="fa-solid fa-table-cells-large"></i> การ์ด
+                  </button>
+                  <button class="view-toggle-btn" id="btnViewTable" title="มุมมองตารางชีต (ดูภาพรวม)">
+                    <i class="fa-solid fa-table"></i> ตารางชีต
+                  </button>
+                </div>
               </div>
               
-              <!-- Results Timeline -->
+              <!-- Results Container (Cards or Table) -->
               <div id="historyResultsContainer"></div>
             </div>
           </div>
         </section>
 
-        <!-- TAB 3: DASHBOARD VIEW -->
+        <!-- TAB 3: DASHBOARD VIEW (ตัวชี้วัด QA ตามมาตรฐานการดูแลความปวด) -->
         <section id="panelDashboard" class="tab-panel hidden">
           <div class="dashboard-grid">
+            
+            <!-- QA Quality Indicators -->
             <div class="chart-card">
-              <h4><i class="fa-solid fa-hospital"></i> สรุปรายการตามหอผู้ป่วย (Wards)</h4>
-              <div id="wardStatsContainer" class="stat-bars-list"></div>
+              <h4><i class="fa-solid fa-shield-halved" style="color:#4f46e5;"></i> ตัวชี้วัดคุณภาพการประเมิน (QA Indicators)</h4>
+              <div id="qaMetricsContainer">
+                <!-- Dynamically rendered progress bars -->
+              </div>
             </div>
 
+            <!-- Tool Distribution -->
             <div class="chart-card">
-              <h4><i class="fa-solid fa-ruler"></i> สัดส่วนเครื่องมือประเมิน (Tools)</h4>
-              <div id="toolStatsContainer" class="stat-bars-list"></div>
+              <h4><i class="fa-solid fa-ruler-combined" style="color:#0284c7;"></i> เครื่องมือประเมินความปวดที่ใช้ (Tool Usage)</h4>
+              <div id="toolStatsContainer" class="stat-bars-list">
+                <!-- Dynamically rendered -->
+              </div>
             </div>
+
           </div>
         </section>
 
@@ -445,19 +476,19 @@
 
   </div>
 
-  <!-- Mobile Bottom Navigation Bar (สำหรับเปิดบนโทรศัพท์มือถือ) -->
+  <!-- Mobile Bottom Navigation Bar -->
   <nav class="mobile-bottom-nav">
     <button class="bottom-nav-item active" data-tab-target="form">
       <i class="fa-solid fa-file-signature"></i>
       <span>บันทึกใหม่</span>
     </button>
     <button class="bottom-nav-item" data-tab-target="history">
-      <i class="fa-solid fa-clock-rotate-left"></i>
-      <span>ค้นหา AN</span>
+      <i class="fa-solid fa-table-list"></i>
+      <span>ข้อมูลในชีต</span>
     </button>
     <button class="bottom-nav-item" data-tab-target="dashboard">
       <i class="fa-solid fa-chart-pie"></i>
-      <span>สรุปผล</span>
+      <span>ตัวชี้วัด QA</span>
     </button>
     <button class="bottom-nav-item" id="btnMobileSettings" onclick="document.getElementById('btnOpenSettings').click()">
       <i class="fa-solid fa-gear"></i>

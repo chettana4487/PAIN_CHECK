@@ -1,15 +1,10 @@
 /**
  * Pain Assessment & Tracking Web App - JavaScript Engine
  * ออกแบบเพื่อการใช้งานบนมือถือ แท็บเล็ต และคอมพิวเตอร์
+ * โครงสร้างข้อมูลสอดคล้องกับ Google Sheet โรงพยาบาล 100% (14 คอลัมน์ Col A-N)
  */
 
 // Dropdown Constants
-const WARDS = [
-  "4/2", "3/2", "3/3", "3/4", "3/5", 
-  "7/2", "7/3", "7/4", "7/5", "7/6", 
-  "5/1", "5/4", "5/5"
-];
-
 const TOOLS = [
   "Numeric Rating Score",
   "Facial rating scale",
@@ -22,31 +17,97 @@ const INTERVENTIONS = [
   "No record"
 ];
 
-// Initial Mock Records for instant preview & demonstration
+// ข้อมูลตัวอย่างเริ่มต้นตามโครงสร้างชีตจริงของโรงพยาบาล
 const INITIAL_DEMO_RECORDS = [
   {
-    "Record ID": "PID-20261002-140230-101",
-    "วันที่และเวลา": "2026-10-02 14:00:00",
-    "ผู้บันทึก": "พว. ศิริพร สมบูรณ์",
-    "AN": "67001234",
-    "หน่วยงาน": "4/2",
+    "_rowIndex": 3,
+    "HN": "1292565",
     "Tool": "Numeric Rating Score",
     "Pain แรกรับ : ฟอร์มปรอท": "YES",
     "Pain แรกรับ : Nurse note": "YES",
     "Pain q 8 hr : ฟอร์มปรอท": "YES",
-    "Pain ≥ 5**": "YES",
-    "Intervention": "Medication",
-    "Re-assessment": "YES",
+    "Pain q 8 hr : Nurse Note": "YES",
+    "Pain ≥ 5**": "NO",
+    "Intervention": "-",
+    "Re-assessment": "-",
     "Operation Surgery": "YES",
     "Pain post-op แรกรับ : ฟอร์มปรอท": "YES",
     "Pain post-op แรกรับ : Nurse Note": "YES",
     "Guideline Post-op": "YES",
-    "หมายเหตุ": "ผู้ป่วยบ่นปวดแผลผ่าตัด Appendectomy ได้รับ Tramadol 50mg IV"
+    "หมายเหตุ": ""
+  },
+  {
+    "_rowIndex": 4,
+    "HN": "1600321",
+    "Tool": "Numeric Rating Score",
+    "Pain แรกรับ : ฟอร์มปรอท": "YES",
+    "Pain แรกรับ : Nurse note": "YES",
+    "Pain q 8 hr : ฟอร์มปรอท": "YES",
+    "Pain q 8 hr : Nurse Note": "YES",
+    "Pain ≥ 5**": "NO",
+    "Intervention": "-",
+    "Re-assessment": "-",
+    "Operation Surgery": "NO",
+    "Pain post-op แรกรับ : ฟอร์มปรอท": "-",
+    "Pain post-op แรกรับ : Nurse Note": "-",
+    "Guideline Post-op": "-",
+    "หมายเหตุ": ""
+  },
+  {
+    "_rowIndex": 5,
+    "HN": "768831",
+    "Tool": "Numeric Rating Score",
+    "Pain แรกรับ : ฟอร์มปรอท": "YES",
+    "Pain แรกรับ : Nurse note": "YES",
+    "Pain q 8 hr : ฟอร์มปรอท": "YES",
+    "Pain q 8 hr : Nurse Note": "YES",
+    "Pain ≥ 5**": "YES",
+    "Intervention": "Medication",
+    "Re-assessment": "YES",
+    "Operation Surgery": "NO",
+    "Pain post-op แรกรับ : ฟอร์มปรอท": "-",
+    "Pain post-op แรกรับ : Nurse Note": "-",
+    "Guideline Post-op": "-",
+    "หมายเหตุ": "ปวดแผลหน้าท้อง ให้ Morphine 3 mg iv"
+  },
+  {
+    "_rowIndex": 6,
+    "HN": "986172",
+    "Tool": "Facial rating scale",
+    "Pain แรกรับ : ฟอร์มปรอท": "YES",
+    "Pain แรกรับ : Nurse note": "YES",
+    "Pain q 8 hr : ฟอร์มปรอท": "YES",
+    "Pain q 8 hr : Nurse Note": "YES",
+    "Pain ≥ 5**": "NO",
+    "Intervention": "-",
+    "Re-assessment": "-",
+    "Operation Surgery": "YES",
+    "Pain post-op แรกรับ : ฟอร์มปรอท": "YES",
+    "Pain post-op แรกรับ : Nurse Note": "YES",
+    "Guideline Post-op": "YES",
+    "หมายเหตุ": ""
+  },
+  {
+    "_rowIndex": 7,
+    "HN": "773868",
+    "Tool": "CPOT",
+    "Pain แรกรับ : ฟอร์มปรอท": "YES",
+    "Pain แรกรับ : Nurse note": "YES",
+    "Pain q 8 hr : ฟอร์มปรอท": "NO",
+    "Pain q 8 hr : Nurse Note": "NO",
+    "Pain ≥ 5**": "NO",
+    "Intervention": "-",
+    "Re-assessment": "-",
+    "Operation Surgery": "NO",
+    "Pain post-op แรกรับ : ฟอร์มปรอท": "-",
+    "Pain post-op แรกรับ : Nurse Note": "-",
+    "Guideline Post-op": "-",
+    "หมายเหตุ": "ย้ายไปทำหัตถการนอกตึก"
   }
 ];
 
 /**
- * Smart Field Normalizer: ดึงค่าจาก Object แม้ชื่อหัวคอลัมน์ใน Google Sheet จะมีเว้นวรรคหรือเขียนต่างกัน
+ * Smart Field Normalizer: ดึงค่าจาก Object แม้ชื่อหัวคอลัมน์ใน Google Sheet จะมีเว้นวรรคหรือสัญลักษณ์ต่างกัน
  */
 function getSmartField(item, possibleKeys, fallback = "") {
   if (!item || typeof item !== "object") return fallback;
@@ -58,14 +119,14 @@ function getSmartField(item, possibleKeys, fallback = "") {
     }
   }
   
-  // 2. Fuzzy match (ตัดช่องว่าง, โคลอน, สัญลักษณ์ และเทียบ case-insensitive)
+  // 2. Clean exact match (ตัดช่องว่าง, โคลอน, สัญลักษณ์ และเทียบ case-insensitive)
   const itemEntries = Object.entries(item);
   for (const pattern of possibleKeys) {
     const cleanPattern = pattern.replace(/[\s:_\-–—*()]/g, "").toLowerCase();
     for (const [rawKey, val] of itemEntries) {
       if (val === undefined || val === null || String(val).trim() === "") continue;
       const cleanRaw = rawKey.replace(/[\s:_\-–—*()]/g, "").toLowerCase();
-      if (cleanRaw === cleanPattern || cleanRaw.includes(cleanPattern)) {
+      if (cleanRaw === cleanPattern) {
         return String(val).trim();
       }
     }
@@ -75,33 +136,21 @@ function getSmartField(item, possibleKeys, fallback = "") {
 }
 
 /**
- * แปลงข้อมูลแถวจาก Google Sheet ให้อยู่ในรูปแบบมาตรฐานของระบบ
+ * แปลงข้อมูลแถวจาก Google Sheet ให้อยู่ในโครงสร้างมาตรฐานของโรงพยาบาล
  */
 function normalizeRecord(item) {
   if (!item || typeof item !== "object") return {};
   
-  const datetime = getSmartField(item, [
-    "วันที่และเวลา", "วันและเวลา", "วัน/เวลา", "วันที่", "Timestamp", "Date", "DateTime", "Date/Time", "Date Time", "เวลา"
-  ], "");
-  
-  const recorder = getSmartField(item, [
-    "ผู้บันทึก", "ชื่อผู้บันทึก", "พยาบาลผู้บันทึก", "พยาบาล", "ผู้ประเมิน", "Recorder", "Staff", "Nurse", "ชื่อ"
-  ], "");
-  
-  const an = getSmartField(item, [
-    "AN", "เลข AN", "Admission Number", "HN", "เลขที่ผู้ป่วย"
-  ], "");
-  
-  const ward = getSmartField(item, [
-    "หน่วยงาน", "หอผู้ป่วย", "Ward", "ตึก", "แผนก", "Department"
-  ], "");
+  const hn = getSmartField(item, [
+    "HN", "เลข HN", "HN ผู้ป่วย", "เลขที่ผู้ป่วย", "AN", "เลข AN", "Admission Number"
+  ], "ไม่ระบุ");
   
   const tool = getSmartField(item, [
     "Tool", "เครื่องมือ", "Pain Tool", "แบบประเมิน"
-  ], "");
+  ], "Numeric Rating Score");
   
   const painInitialThermo = getSmartField(item, [
-    "Pain แรกรับ : ฟอร์มปรอท", "Pain แรกรับ ฟอร์มปรอท", "แรกรับ : ฟอร์มปรอท", "แรกรับ ฟอร์มปรอท", "แรกรับปรอท", "Pain แรกรับปรอท", "แรกรับปรอท"
+    "Pain แรกรับ : ฟอร์มปรอท", "Pain แรกรับ ฟอร์มปรอท", "แรกรับ : ฟอร์มปรอท", "แรกรับ ฟอร์มปรอท", "แรกรับปรอท", "Pain แรกรับปรอท"
   ], "-");
   
   const painInitialNote = getSmartField(item, [
@@ -109,7 +158,11 @@ function normalizeRecord(item) {
   ], "-");
   
   const painQ8Thermo = getSmartField(item, [
-    "Pain q 8 hr : ฟอร์มปรอท", "Pain q 8 hr ฟอร์มปรอท", "Pain q8 hr", "Pain q8", "q 8 hr", "q8hr", "q8 hr : ฟอร์มปรอท", "q8 ฟอร์มปรอท"
+    "Pain q 8 hr : ฟอร์มปรอท", "Pain q 8 hr ฟอร์มปรอท", "Pain q8 hr", "Pain q8", "q 8 hr", "q8hr", "q8 hr : ฟอร์มปรอท"
+  ], "-");
+
+  const painQ8Note = getSmartField(item, [
+    "Pain q 8 hr : Nurse Note", "Pain q 8 hr : Nurse note", "Pain q8 hr Nurse Note", "q 8 hr : Nurse Note", "q8 Nurse Note"
   ], "-");
   
   let painOver5 = getSmartField(item, [
@@ -123,14 +176,14 @@ function normalizeRecord(item) {
   
   const intervention = getSmartField(item, [
     "Intervention", "การจัดการความปวด", "การพยาบาล", "การดูแล"
-  ], "");
+  ], "-");
   
   const reassessment = getSmartField(item, [
     "Re-assessment", "Reassessment", "Re-assess", "ประเมินซ้ำ", "การประเมินซ้ำ"
-  ], "");
+  ], "-");
   
   let opSurgery = getSmartField(item, [
-    "Operation Surgery", "Operation", "Surgery", "ผ่าตัด", "การผ่าตัด"
+    "Operation Surgery", "Operation Surgery**", "Operation", "Surgery", "ผ่าตัด", "การผ่าตัด"
   ], "NO");
   if (String(opSurgery).toUpperCase() === "YES" || opSurgery === "1" || opSurgery === "ใช่") {
     opSurgery = "YES";
@@ -139,34 +192,30 @@ function normalizeRecord(item) {
   }
   
   const painPostOpThermo = getSmartField(item, [
-    "Pain post-op แรกรับ : ฟอร์มปรอท", "Pain post-op แรกรับ ฟอร์มปรอท", "Post-op แรกรับ : ฟอร์มปรอท", "Post-op ปรอท", "Postop ปรอท"
+    "Pain post - op แรกรับ : ฟอร์มปรอท", "Pain post-op แรกรับ : ฟอร์มปรอท", "Pain post-op แรกรับ ฟอร์มปรอท", "Post-op แรกรับ : ฟอร์มปรอท", "Post-op ปรอท"
   ], "-");
   
   const painPostOpNote = getSmartField(item, [
-    "Pain post-op แรกรับ : Nurse Note", "Pain post-op แรกรับ : Nurse note", "Post-op แรกรับ : Nurse Note", "Post-op Note", "Postop Note"
+    "Pain post - op แรกรับ : Nurse Note", "Pain post-op แรกรับ : Nurse Note", "Pain post-op แรกรับ : Nurse note", "Post-op แรกรับ : Nurse Note", "Post-op Note"
   ], "-");
   
   const guidelinePostOp = getSmartField(item, [
-    "Guideline Post-op", "Guideline post-op", "Guideline", "Post-op Guideline", "แนวทาง Post-op"
+    "Guideline Post - op", "Guideline Post-op", "Guideline post-op", "Guideline", "Post-op Guideline", "แนวทาง Post-op"
   ], "-");
   
   const note = getSmartField(item, [
-    "หมายเหตุ", "Note", "Remarks", "Remark", "รายละเอียดเพิ่มเติม", "Comment"
+    "หมายเหตุ", "Remarks", "Remark", "รายละเอียดเพิ่มเติม", "Comment"
   ], "");
-  
-  const recordId = item["Record ID"] || item["recordId"] || ("PID-" + Math.floor(Math.random() * 1000000));
   
   return {
     ...item,
-    "Record ID": recordId,
-    "วันที่และเวลา": datetime,
-    "ผู้บันทึก": recorder,
-    "AN": an,
-    "หน่วยงาน": ward,
+    "HN": hn,
+    "AN": hn,
     "Tool": tool,
     "Pain แรกรับ : ฟอร์มปรอท": painInitialThermo,
     "Pain แรกรับ : Nurse note": painInitialNote,
     "Pain q 8 hr : ฟอร์มปรอท": painQ8Thermo,
+    "Pain q 8 hr : Nurse Note": painQ8Note,
     "Pain ≥ 5**": painOver5,
     "Intervention": intervention,
     "Re-assessment": reassessment,
@@ -181,26 +230,35 @@ function normalizeRecord(item) {
 // App State
 let state = {
   records: [],
-  sheets: ["Pain_Data"],
-  currentSheet: "Pain_Data",
+  sheets: ["ตุลาคม 2567"],
+  currentSheet: "ตุลาคม 2567",
+  activeFilter: "all", // "all" | "severe" | "surgery" | "incomplete"
+  viewMode: "cards",   // "cards" | "table"
+  activeSearchHN: "",
   googleScriptUrl: localStorage.getItem("painApp_scriptUrl") || "",
-  currentTab: "form", // "form" | "history" | "dashboard"
-  activeSearchAN: "",
-  savedRecorder: localStorage.getItem("painApp_recorder") || "",
+  currentTab: "form",  // "form" | "history" | "dashboard"
   isOnlineSyncing: false
 };
 
-// DOM Elements
+// DOM Elements Container
 const elements = {};
 
 document.addEventListener("DOMContentLoaded", () => {
   initDOMElements();
   initDropdownOptions();
   loadStoredRecords();
-  initFormDateTime();
   bindEvents();
   document.body.setAttribute("data-active-tab", "form");
   renderKPIs();
+  
+  // ตรวจสอบ Tab จาก URL Hash หรือ Query Params (เช่น #history หรือ ?tab=history)
+  const urlTab = window.location.hash.replace("#", "") || new URLSearchParams(window.location.search).get("tab");
+  if (urlTab && ["form", "history", "dashboard"].includes(urlTab)) {
+    switchTab(urlTab);
+  } else {
+    renderHistoryView();
+  }
+  
   updatePainConditionUI();
   updateSurgeryConditionUI();
   updateSyncStatusBadge();
@@ -225,20 +283,27 @@ function initDOMElements() {
   elements.btnRefreshSheets = document.getElementById("btnRefreshSheets");
   elements.formTargetSheet = document.getElementById("formTargetSheet");
   
-  // Search
+  // Search & Filters
   elements.searchANInput = document.getElementById("searchANInput");
   elements.btnSearchAN = document.getElementById("btnSearchAN");
   elements.btnClearSearch = document.getElementById("btnClearSearch");
   elements.historyResultsContainer = document.getElementById("historyResultsContainer");
   elements.historySearchTitle = document.getElementById("historySearchTitle");
-  elements.btnSearchNewEntry = document.getElementById("btnSearchNewEntry");
+  elements.historyShowingSummary = document.getElementById("historyShowingSummary");
+  elements.btnQuickCheckHN = document.getElementById("btnQuickCheckHN");
   
-  // Dynamic fields
-  elements.inputDatetime = document.getElementById("inputDatetime");
-  elements.inputRecorder = document.getElementById("inputRecorder");
+  // View Switchers
+  elements.btnViewCards = document.getElementById("btnViewCards");
+  elements.btnViewTable = document.getElementById("btnViewTable");
+  elements.filterChips = document.querySelectorAll(".filter-chip");
+  
+  // Form Inputs
   elements.inputAN = document.getElementById("inputAN");
-  elements.selectWard = document.getElementById("selectWard");
   elements.selectTool = document.getElementById("selectTool");
+  elements.painInitialThermo = document.getElementById("painInitialThermo");
+  elements.painInitialNote = document.getElementById("painInitialNote");
+  elements.painQ8Thermo = document.getElementById("painQ8Thermo");
+  elements.painQ8Note = document.getElementById("painQ8Note");
   
   elements.painOver5Select = document.getElementById("painOver5Select");
   elements.groupIntervention = document.getElementById("groupIntervention");
@@ -248,6 +313,10 @@ function initDOMElements() {
   
   elements.selectSurgery = document.getElementById("selectSurgery");
   elements.surgeryDetailsGroup = document.getElementById("surgeryDetailsGroup");
+  elements.painPostOpThermo = document.getElementById("painPostOpThermo");
+  elements.painPostOpNote = document.getElementById("painPostOpNote");
+  elements.guidelinePostOp = document.getElementById("guidelinePostOp");
+  elements.inputRemarks = document.getElementById("inputRemarks");
   
   // Modal Settings
   elements.btnOpenSettings = document.getElementById("btnOpenSettings");
@@ -260,210 +329,194 @@ function initDOMElements() {
 }
 
 function initDropdownOptions() {
-  // Populate Wards
-  elements.selectWard.innerHTML = `<option value="">เลือกหน่วยงาน</option>` + 
-    WARDS.map(w => `<option value="${w}">${w}</option>`).join("");
+  if (elements.selectTool) {
+    elements.selectTool.innerHTML = `<option value="">เลือก Tool การประเมิน</option>` + 
+      TOOLS.map(t => `<option value="${t}">${t}</option>`).join("");
+    elements.selectTool.value = TOOLS[0];
+  }
     
-  // Populate Tools
-  elements.selectTool.innerHTML = `<option value="">เลือก Tool การประเมิน</option>` + 
-    TOOLS.map(t => `<option value="${t}">${t}</option>`).join("");
-    
-  // Populate Intervention
-  elements.selectIntervention.innerHTML = `<option value="">เลือก Intervention</option>` + 
-    INTERVENTIONS.map(i => `<option value="${i}">${i}</option>`).join("");
-}
-
-function initFormDateTime() {
-  // Set current local datetime in format yyyy-MM-ddTHH:mm
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  
-  elements.inputDatetime.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-  
-  // Set remembered recorder
-  if (state.savedRecorder) {
-    elements.inputRecorder.value = state.savedRecorder;
+  if (elements.selectIntervention) {
+    elements.selectIntervention.innerHTML = `<option value="">เลือก Intervention</option>` + 
+      INTERVENTIONS.map(i => `<option value="${i}">${i}</option>`).join("");
   }
-}
-
-function loadStoredRecords() {
-  const localData = localStorage.getItem("painApp_records");
-  if (localData) {
-    try {
-      const parsed = JSON.parse(localData);
-      state.records = Array.isArray(parsed) ? parsed.map(normalizeRecord) : INITIAL_DEMO_RECORDS;
-    } catch (e) {
-      state.records = INITIAL_DEMO_RECORDS;
-    }
-  } else {
-    state.records = INITIAL_DEMO_RECORDS;
-    saveRecordsToLocal();
-  }
-  
-  // If Google Script URL is present, attempt fetching remote data
-  if (state.googleScriptUrl) {
-    fetchFromGoogleSheet();
-  }
-}
-
-function saveRecordsToLocal() {
-  localStorage.setItem("painApp_records", JSON.stringify(state.records));
 }
 
 function bindEvents() {
-  // Tab switching
+  // Navigation Tabs
   elements.tabBtns.forEach(btn => {
     btn.addEventListener("click", () => {
-      const target = btn.dataset.tabTarget;
+      const target = btn.getAttribute("data-tab-target");
       switchTab(target);
     });
   });
   
-  // Pain >= 5 condition change
-  elements.painOver5Select.addEventListener("change", updatePainConditionUI);
-  
-  // Surgery condition change
-  elements.selectSurgery.addEventListener("change", updateSurgeryConditionUI);
-  
-  // Form submission
-  elements.painForm.addEventListener("submit", handleFormSubmit);
-  
-  // Reset button
-  elements.btnReset.addEventListener("click", () => {
-    setTimeout(() => {
-      initFormDateTime();
-      updatePainConditionUI();
-      updateSurgeryConditionUI();
-    }, 50);
-  });
-  
-  // Monthly Worksheet Change
+  // Sheet Selector
   if (elements.selectSheetMonth) {
     elements.selectSheetMonth.addEventListener("change", (e) => {
       const selected = e.target.value;
       if (selected) {
         state.currentSheet = selected;
+        if (elements.formTargetSheet) elements.formTargetSheet.value = selected;
         fetchFromGoogleSheet(selected);
-        if (elements.formTargetSheet) {
-          elements.formTargetSheet.value = selected;
-        }
       }
     });
   }
-
+  
   if (elements.btnRefreshSheets) {
     elements.btnRefreshSheets.addEventListener("click", () => {
       fetchSheetList(true);
     });
   }
   
-  // Search actions
-  elements.btnSearchAN.addEventListener("click", () => {
-    performSearchAN(elements.searchANInput.value.trim());
-  });
+  if (elements.formTargetSheet) {
+    elements.formTargetSheet.addEventListener("change", (e) => {
+      state.currentSheet = e.target.value;
+      if (elements.selectSheetMonth) elements.selectSheetMonth.value = e.target.value;
+    });
+  }
+
+  // Quick Check HN in Form
+  if (elements.btnQuickCheckHN) {
+    elements.btnQuickCheckHN.addEventListener("click", () => {
+      const q = (elements.inputAN.value || "").trim();
+      if (!q) {
+        showToast("กรุณากรอกเลข HN ก่อนตรวจประวัติ", "warning");
+        elements.inputAN.focus();
+        return;
+      }
+      checkHNInCurrentSheet(q);
+    });
+  }
+
+  // Search in History
+  if (elements.btnSearchAN) {
+    elements.btnSearchAN.addEventListener("click", () => {
+      executeSearch();
+    });
+  }
   
-  elements.searchANInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      performSearchAN(elements.searchANInput.value.trim());
-    }
-  });
+  if (elements.searchANInput) {
+    elements.searchANInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        executeSearch();
+      }
+    });
+  }
   
-  elements.btnClearSearch.addEventListener("click", () => {
-    elements.searchANInput.value = "";
-    performSearchAN("");
-  });
+  if (elements.btnClearSearch) {
+    elements.btnClearSearch.addEventListener("click", () => {
+      if (elements.searchANInput) elements.searchANInput.value = "";
+      state.activeSearchHN = "";
+      renderHistoryView();
+    });
+  }
+
+  // Filter Chips
+  if (elements.filterChips) {
+    elements.filterChips.forEach(chip => {
+      chip.addEventListener("click", () => {
+        elements.filterChips.forEach(c => c.classList.remove("active"));
+        chip.classList.add("active");
+        state.activeFilter = chip.getAttribute("data-filter") || "all";
+        renderHistoryView();
+      });
+    });
+  }
+
+  // View Mode Switcher
+  if (elements.btnViewCards) {
+    elements.btnViewCards.addEventListener("click", () => {
+      state.viewMode = "cards";
+      elements.btnViewCards.classList.add("active");
+      if (elements.btnViewTable) elements.btnViewTable.classList.remove("active");
+      renderHistoryView();
+    });
+  }
+
+  if (elements.btnViewTable) {
+    elements.btnViewTable.addEventListener("click", () => {
+      state.viewMode = "table";
+      elements.btnViewTable.classList.add("active");
+      if (elements.btnViewCards) elements.btnViewCards.classList.remove("active");
+      renderHistoryView();
+    });
+  }
+  
+  // Form Logic
+  if (elements.painOver5Select) {
+    elements.painOver5Select.addEventListener("change", updatePainConditionUI);
+  }
+  
+  if (elements.selectSurgery) {
+    elements.selectSurgery.addEventListener("change", updateSurgeryConditionUI);
+  }
+  
+  if (elements.painForm) {
+    elements.painForm.addEventListener("submit", handleFormSubmit);
+    elements.painForm.addEventListener("reset", () => {
+      setTimeout(() => {
+        if (elements.selectTool) elements.selectTool.value = TOOLS[0];
+        updatePainConditionUI();
+        updateSurgeryConditionUI();
+        if (elements.formTargetSheet) elements.formTargetSheet.value = state.currentSheet;
+      }, 50);
+    });
+  }
   
   // Settings Modal
-  elements.btnOpenSettings.addEventListener("click", () => {
-    elements.scriptUrlInput.value = state.googleScriptUrl;
-    elements.settingsModal.classList.add("active");
-  });
+  if (elements.btnOpenSettings) {
+    elements.btnOpenSettings.addEventListener("click", openSettingsModal);
+  }
   
-  elements.btnCloseModal.addEventListener("click", () => {
-    elements.settingsModal.classList.remove("active");
-  });
+  if (elements.btnCloseModal) {
+    elements.btnCloseModal.addEventListener("click", closeSettingsModal);
+  }
   
-  elements.settingsModal.addEventListener("click", (e) => {
-    if (e.target === elements.settingsModal) {
-      elements.settingsModal.classList.remove("active");
-    }
-  });
+  if (elements.settingsModal) {
+    elements.settingsModal.addEventListener("click", (e) => {
+      if (e.target === elements.settingsModal) closeSettingsModal();
+    });
+  }
   
-  elements.btnSaveSettings.addEventListener("click", () => {
-    const url = elements.scriptUrlInput.value.trim();
-    state.googleScriptUrl = url;
-    localStorage.setItem("painApp_scriptUrl", url);
-    showToast("บันทึกการตั้งค่า Google Sheet เรียบร้อย", "success");
-    elements.settingsModal.classList.remove("active");
-    updateSyncStatusBadge();
-    if (url) {
-      fetchFromGoogleSheet();
-    }
-  });
+  if (elements.btnSaveSettings) {
+    elements.btnSaveSettings.addEventListener("click", saveSettings);
+  }
   
-  elements.btnTestSync.addEventListener("click", () => {
-    const testUrl = elements.scriptUrlInput.value.trim();
-    if (!testUrl) {
-      showToast("กรุณากรอก Web App URL ก่อนทดสอบ", "warning");
-      return;
-    }
-    testGoogleSheetConnection(testUrl);
-  });
-}
-
-function switchTab(tabKey) {
-  state.currentTab = tabKey;
-  document.body.setAttribute("data-active-tab", tabKey);
-  
-  // Update header buttons
-  elements.tabBtns.forEach(btn => {
-    if (btn.dataset.tabTarget === tabKey) {
-      btn.classList.add("active");
-    } else {
-      btn.classList.remove("active");
-    }
-  });
-  
-  // Toggle panel visibility
-  Object.keys(elements.tabPanels).forEach(key => {
-    if (key === tabKey) {
-      elements.tabPanels[key].classList.remove("hidden");
-    } else {
-      elements.tabPanels[key].classList.add("hidden");
-    }
-  });
-  
-  if (tabKey === "dashboard") {
-    renderDashboardAnalytics();
-  } else if (tabKey === "history") {
-    if (elements.searchANInput.value.trim()) {
-      performSearchAN(elements.searchANInput.value.trim());
-    } else {
-      renderAllHistory();
-    }
+  if (elements.btnTestSync) {
+    elements.btnTestSync.addEventListener("click", testConnection);
   }
 }
 
 /**
- * เงื่อนไขของ Pain ≥ 5:
- * เมื่อเลือก Pain ≥ 5** = YES
- *  - Intervention ต้องเลือก
- *  - Re-assessment ต้องเลือก
- * เมื่อเลือก Pain ≥ 5** = NO
- *  - ช่อง Intervention และ Re-assessment สามารถเว้นว่างได้
- *  - ควรทำให้ช่องเป็นสีเทาเพื่อแสดงว่าไม่จำเป็นต้องกรอก
+ * สลับแท็บการทำงาน
  */
-function updatePainConditionUI() {
-  const val = elements.painOver5Select.value;
-  const isYes = val === "YES";
+function switchTab(tabId) {
+  state.currentTab = tabId;
+  document.body.setAttribute("data-active-tab", tabId);
   
-  if (isYes) {
-    // Enable & Mark required
+  document.querySelectorAll("[data-tab-target]").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-tab-target") === tabId);
+  });
+  
+  Object.keys(elements.tabPanels).forEach(key => {
+    if (elements.tabPanels[key]) {
+      elements.tabPanels[key].classList.toggle("hidden", key !== tabId);
+    }
+  });
+  
+  if (tabId === "history") {
+    renderHistoryView();
+  } else if (tabId === "dashboard") {
+    renderAnalytics();
+  }
+}
+
+function updatePainConditionUI() {
+  if (!elements.painOver5Select) return;
+  const isOver5 = elements.painOver5Select.value === "YES";
+  
+  if (isOver5) {
     elements.groupIntervention.classList.remove("is-disabled");
     elements.groupReassessment.classList.remove("is-disabled");
     elements.selectIntervention.removeAttribute("disabled");
@@ -471,10 +524,8 @@ function updatePainConditionUI() {
     elements.selectIntervention.setAttribute("required", "required");
     elements.selectReassessment.setAttribute("required", "required");
     
-    // Alert background visual hint
-    document.getElementById("sectionPainAlert").style.borderColor = "#f59e0b";
+    document.getElementById("sectionPainAlert").style.borderColor = "#f97316";
   } else {
-    // Disable, Gray out & Clear required
     elements.groupIntervention.classList.add("is-disabled");
     elements.groupReassessment.classList.add("is-disabled");
     elements.selectIntervention.setAttribute("disabled", "disabled");
@@ -489,6 +540,7 @@ function updatePainConditionUI() {
 }
 
 function updateSurgeryConditionUI() {
+  if (!elements.selectSurgery || !elements.surgeryDetailsGroup) return;
   const isOp = elements.selectSurgery.value === "YES";
   if (isOp) {
     elements.surgeryDetailsGroup.classList.remove("hidden");
@@ -498,21 +550,16 @@ function updateSurgeryConditionUI() {
 }
 
 /**
- * Submit Form & Save Record
- * ทุกครั้งที่บันทึก ระบบจะเก็บเป็นประวัติรายการใหม่ โดยไม่เขียนทับข้อมูลเดิม
+ * บันทึกข้อมูลเข้า Google Sheet
  */
 async function handleFormSubmit(e) {
   e.preventDefault();
   
-  const rawDatetime = elements.inputDatetime.value; // yyyy-MM-ddTHH:mm
-  const formattedDatetime = rawDatetime.replace("T", " ") + ":00";
-  const recorder = elements.inputRecorder.value.trim();
-  const an = elements.inputAN.value.trim();
-  const ward = elements.selectWard.value;
+  const hn = (elements.inputAN.value || "").trim();
   const tool = elements.selectTool.value;
   
-  if (!an || !ward || !tool || !recorder) {
-    showToast("กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบถ้วน", "warning");
+  if (!hn || !tool) {
+    showToast("กรุณากรอกเลข HN และเลือก Tool การประเมิน", "warning");
     return;
   }
   
@@ -526,34 +573,32 @@ async function handleFormSubmit(e) {
       return;
     }
   } else {
-    intervention = "";
-    reassessment = "";
+    intervention = "-";
+    reassessment = "-";
   }
   
   const opSurgery = elements.selectSurgery.value;
-  const painInitialThermo = document.getElementById("painInitialThermo").value;
-  const painInitialNote = document.getElementById("painInitialNote").value;
-  const painQ8Thermo = document.getElementById("painQ8Thermo").value;
+  const painInitialThermo = elements.painInitialThermo ? elements.painInitialThermo.value : "YES";
+  const painInitialNote = elements.painInitialNote ? elements.painInitialNote.value : "YES";
+  const painQ8Thermo = elements.painQ8Thermo ? elements.painQ8Thermo.value : "YES";
+  const painQ8Note = elements.painQ8Note ? elements.painQ8Note.value : "YES";
   
-  const painPostOpThermo = opSurgery === "YES" ? document.getElementById("painPostOpThermo").value : "NO";
-  const painPostOpNote = opSurgery === "YES" ? document.getElementById("painPostOpNote").value : "NO";
-  const guidelinePostOp = opSurgery === "YES" ? document.getElementById("guidelinePostOp").value : "NO";
-  const note = document.getElementById("inputRemarks").value.trim();
+  const painPostOpThermo = opSurgery === "YES" ? (elements.painPostOpThermo ? elements.painPostOpThermo.value : "YES") : "-";
+  const painPostOpNote = opSurgery === "YES" ? (elements.painPostOpNote ? elements.painPostOpNote.value : "YES") : "-";
+  const guidelinePostOp = opSurgery === "YES" ? (elements.guidelinePostOp ? elements.guidelinePostOp.value : "YES") : "-";
+  const note = (elements.inputRemarks ? elements.inputRemarks.value : "").trim();
   
-  // Generate Unique Record ID
-  const timestampStr = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
-  const recordId = `PID-${timestampStr}-${Math.floor(100 + Math.random() * 900)}`;
+  const targetSheet = elements.formTargetSheet ? elements.formTargetSheet.value : (state.currentSheet || "");
   
   const newRecord = {
-    "Record ID": recordId,
-    "วันที่และเวลา": formattedDatetime,
-    "ผู้บันทึก": recorder,
-    "AN": an,
-    "หน่วยงาน": ward,
+    "_sheetName": targetSheet,
+    "HN": hn,
+    "AN": hn,
     "Tool": tool,
     "Pain แรกรับ : ฟอร์มปรอท": painInitialThermo,
     "Pain แรกรับ : Nurse note": painInitialNote,
     "Pain q 8 hr : ฟอร์มปรอท": painQ8Thermo,
+    "Pain q 8 hr : Nurse Note": painQ8Note,
     "Pain ≥ 5**": painOver5,
     "Intervention": intervention,
     "Re-assessment": reassessment,
@@ -561,111 +606,568 @@ async function handleFormSubmit(e) {
     "Pain post-op แรกรับ : ฟอร์มปรอท": painPostOpThermo,
     "Pain post-op แรกรับ : Nurse Note": painPostOpNote,
     "Guideline Post-op": guidelinePostOp,
-    "หมายเหตุ": note,
-    "sheetName": elements.formTargetSheet ? elements.formTargetSheet.value : (state.currentSheet || "Pain_Data")
+    "หมายเหตุ": note
   };
   
-  // 1. จำชื่อผู้บันทึก
-  state.savedRecorder = recorder;
-  localStorage.setItem("painApp_recorder", recorder);
-  
-  // 2. บันทึกลง Local Memory (เพิ่มเป็นรายการใหม่ที่หัวแถว)
+  // บันทึกลงหน่วยความจำชั่วคราว
   state.records.unshift(newRecord);
   saveRecordsToLocal();
   renderKPIs();
   
-  // 3. ปิดการคลิกซ้ำขณะส่งข้อมูล
+  // ปิดปุ่มระหว่างส่งข้อมูล
+  const origBtnText = elements.btnSubmit.innerHTML;
   elements.btnSubmit.disabled = true;
-  elements.btnSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...`;
+  elements.btnSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึกลงชีต...`;
   
-  // 4. ส่งข้อมูลไปยัง Google Sheet API ถ้ามีการตั้งค่า
   if (state.googleScriptUrl) {
     try {
-      await sendRecordToGoogleSheet(newRecord);
-      showToast(`บันทึกข้อมูล AN ${an} ลง Google Sheet สำเร็จ!`, "success");
+      const payload = {
+        sheetName: targetSheet,
+        HN: hn,
+        AN: hn,
+        Tool: tool,
+        "Painแรกรับ_ฟอร์มปรอท": painInitialThermo,
+        "Painแรกรับ_NurseNote": painInitialNote,
+        "PainQ8_ฟอร์มปรอท": painQ8Thermo,
+        "PainQ8_NurseNote": painQ8Note,
+        "Pain ≥ 5**": painOver5,
+        "Intervention": intervention,
+        "Re-assessment": reassessment,
+        "Operation Surgery": opSurgery,
+        "PainPostOp_ฟอร์มปรอท": painPostOpThermo,
+        "PainPostOp_NurseNote": painPostOpNote,
+        "Guideline": guidelinePostOp,
+        "หมายเหตุ": note
+      };
+      
+      const response = await fetch(state.googleScriptUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+      
+      showToast(`บันทึกข้อมูล HN ${hn} ลงชีต "${targetSheet}" เรียบร้อยแล้ว!`, "success");
+      
+      // ดึงข้อมูลใหม่อีกครั้ง
+      setTimeout(() => {
+        fetchFromGoogleSheet(targetSheet);
+      }, 1000);
+      
     } catch (err) {
-      console.warn("Sheet save error:", err);
-      showToast(`บันทึกลงเครื่องแล้ว (ส่งเข้า Google Sheet ไม่สำเร็จ: ${err.message})`, "warning");
+      console.error("Error submitting to Google Sheets:", err);
+      showToast(`บันทึกในเครื่องเรียบร้อยแล้ว (การเชื่อมต่อชีตขัดข้อง: ${err.message})`, "warning");
+    } finally {
+      elements.btnSubmit.disabled = false;
+      elements.btnSubmit.innerHTML = origBtnText;
     }
   } else {
-    showToast(`บันทึกข้อมูล AN ${an} สำเร็จ (โหมดออฟไลน์/ทดสอบ)`, "success");
+    setTimeout(() => {
+      elements.btnSubmit.disabled = false;
+      elements.btnSubmit.innerHTML = origBtnText;
+      showToast(`บันทึกข้อมูล HN ${hn} สำเร็จ (โหมดออฟไลน์)`, "success");
+    }, 400);
   }
   
-  // รีเซ็ตปุ่มและฟอร์มบางส่วน
-  elements.btnSubmit.disabled = false;
-  elements.btnSubmit.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูล`;
+  // ล้างฟอร์มบางส่วนเพื่อพร้อมบันทึกรายถัดไป
+  elements.inputAN.value = "";
+  if (elements.inputRemarks) elements.inputRemarks.value = "";
+  elements.inputAN.focus();
+}
+
+/**
+ * ตรวจสอบ HN ในชีตปัจจุบันแบบรวดเร็ว
+ */
+function checkHNInCurrentSheet(hn) {
+  const match = state.records.filter(r => String(r["HN"] || "").toLowerCase() === hn.toLowerCase());
+  if (match.length > 0) {
+    showToast(`พบประวัติเดิมของ HN ${hn} ในชีตนี้แล้ว ${match.length} รายการ`, "info");
+    elements.searchANInput.value = hn;
+    switchTab("history");
+    executeSearch();
+  } else {
+    showToast(`ไม่พบประวัติเดิมของ HN ${hn} ในชีตเดือนนี้ (สามารถลงบันทึกเป็นคนไข้รายใหม่ได้ทันที)`, "success");
+  }
+}
+
+/**
+ * ค้นหาประวัติ HN
+ */
+function executeSearch() {
+  const q = (elements.searchANInput ? elements.searchANInput.value : "").trim();
+  state.activeSearchHN = q;
+  switchTab("history");
+  renderHistoryView();
+}
+
+/**
+ * Render รายการประวัติ (มุมมองการ์ด หรือ ตารางชีต)
+ */
+function renderHistoryView() {
+  const container = elements.historyResultsContainer;
+  if (!container) return;
   
-  // เคลียร์ฟอร์ม ยกเว้นชื่อผู้บันทึก และอัปเดตเวลาใหม่
-  elements.painForm.reset();
-  initFormDateTime();
+  let list = [...state.records];
+  
+  // 1. กรองตาม Search HN
+  if (state.activeSearchHN) {
+    const q = state.activeSearchHN.toLowerCase();
+    list = list.filter(item => {
+      const hn = String(item["HN"] || item["AN"] || "").toLowerCase();
+      return hn.includes(q);
+    });
+  }
+  
+  // 2. กรองตาม Filter Chip
+  if (state.activeFilter === "severe") {
+    list = list.filter(item => String(item["Pain ≥ 5**"]).toUpperCase() === "YES");
+  } else if (state.activeFilter === "surgery") {
+    list = list.filter(item => String(item["Operation Surgery"]).toUpperCase() === "YES");
+  } else if (state.activeFilter === "incomplete") {
+    list = list.filter(item => 
+      String(item["Pain แรกรับ : ฟอร์มปรอท"]).toUpperCase() !== "YES" || 
+      String(item["Pain แรกรับ : Nurse note"]).toUpperCase() !== "YES"
+    );
+  }
+  
+  // อัปเดตตัวเลขใน Filter Chips
+  updateFilterChipCounts();
+  
+  // Header bar
+  if (elements.historySearchTitle) {
+    const totalInSheet = state.records.length;
+    const sheetName = state.currentSheet || "ข้อมูลปัจจุบัน";
+    elements.historySearchTitle.innerHTML = `
+      <div>
+        <h4 style="font-size:1.05rem; font-weight:700; color:#1e1b4b; display:flex; align-items:center; gap:8px;">
+          <i class="fa-regular fa-folder-open" style="color:#4f46e5;"></i> ชีต: ${sheetName}
+        </h4>
+        <span style="font-size:0.8rem; color:#64748b;">
+          ${state.activeSearchHN ? `ผลการค้นหา HN: <strong>${state.activeSearchHN}</strong> (${list.length} รายการ)` : `ผู้ป่วยทั้งหมดในชีตนี้ ${totalInSheet} รายการ`}
+        </span>
+      </div>
+      <div>
+        <button class="btn-primary" style="padding:6px 14px; font-size:0.82rem;" onclick="switchTab('form')">
+          <i class="fa-solid fa-plus"></i> บันทึกคนไข้ใหม่
+        </button>
+      </div>
+    `;
+  }
+  
+  if (elements.historyShowingSummary) {
+    elements.historyShowingSummary.textContent = `แสดง ${list.length} จากทั้งหมด ${state.records.length} คนไข้`;
+  }
+  
+  // แสดงผลกรณีไม่พบข้อมูล
+  if (list.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:36px 16px; background:#f8fafc; border-radius:12px; border:1px dashed #cbd5e1;">
+        <i class="fa-regular fa-folder-open" style="font-size:2rem; color:#94a3b8; margin-bottom:10px; display:block;"></i>
+        <p style="font-weight:700; font-size:1rem; color:#475569;">ไม่พบข้อมูลผู้ป่วยที่ค้นหา</p>
+        <p style="font-size:0.85rem; color:#94a3b8; margin-top:4px;">กรุณาตรวจสอบเลข HN หรือสลับดู Work Sheet ประจำเดือนอื่น</p>
+        <button class="btn-primary" style="margin-top:14px;" onclick="switchTab('form')">
+          <i class="fa-solid fa-plus"></i> เริ่มบันทึก HN ใหม่
+        </button>
+      </div>
+    `;
+    return;
+  }
+  
+  // สลับการแสดงผลตาม View Mode
+  if (state.viewMode === "table") {
+    renderSpreadsheetTableView(list, container);
+  } else {
+    renderCardView(list, container);
+  }
+}
+
+/**
+ * แสดงผลแบบการ์ด (Card View - สวยหรู สบายตาบนมือถือ)
+ */
+function renderCardView(list, container) {
+  let html = `<div style="display:flex; flex-direction:column; gap:12px;">`;
+  
+  list.forEach((item, idx) => {
+    const isSevere = String(item["Pain ≥ 5**"]).toUpperCase() === "YES";
+    const isSurgery = String(item["Operation Surgery"]).toUpperCase() === "YES";
+    const hnDisplay = item["HN"] || item["AN"] || "ไม่ระบุ";
+    const toolDisplay = item["Tool"] || "Numeric Rating Score";
+    const rowNum = item["_rowIndex"] ? item._rowIndex - 2 : (idx + 1);
+    
+    html += `
+      <div style="background:white; border:1px solid ${isSevere ? '#fca5a5' : '#e2e8f0'}; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); position:relative;">
+        
+        <!-- Header การ์ด -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:0.75rem; background:#f1f5f9; color:#475569; font-weight:700; padding:2px 7px; border-radius:6px;">
+              #${rowNum}
+            </span>
+            <span class="hn-tag">HN ${hnDisplay}</span>
+            <button class="icon-btn" style="width:26px; height:26px; font-size:0.7rem;" title="คัดลอก HN" onclick="copyHN('${hnDisplay}')">
+              <i class="fa-regular fa-copy"></i>
+            </button>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <span class="badge badge-tool"><i class="fa-solid fa-ruler"></i> ${toolDisplay}</span>
+            ${isSevere ? `<span class="badge badge-pain-alert"><i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5</span>` : `<span class="badge badge-ok">Pain &lt; 5</span>`}
+            ${isSurgery ? `<span class="badge badge-surgery"><i class="fa-solid fa-syringe"></i> ผ่าตัด</span>` : ``}
+          </div>
+        </div>
+        
+        <!-- รายละเอียดประเมิน 2 คอลัมน์ -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; background:#f8fafc; padding:10px 12px; border-radius:8px; font-size:0.82rem;">
+          
+          <div>
+            <span style="font-size:0.72rem; color:#64748b; display:block;">Pain แรกรับ (ปรอท / Nurse Note)</span>
+            <span style="font-weight:700;">
+              <span class="${item["Pain แรกรับ : ฟอร์มปรอท"] === 'YES' ? 'text-yes' : 'text-no'}">${item["Pain แรกรับ : ฟอร์มปรอท"] || '-'}</span> / 
+              <span class="${item["Pain แรกรับ : Nurse note"] === 'YES' ? 'text-yes' : 'text-no'}">${item["Pain แรกรับ : Nurse note"] || '-'}</span>
+            </span>
+          </div>
+
+          <div>
+            <span style="font-size:0.72rem; color:#64748b; display:block;">Pain q 8 hr (ปรอท / Nurse Note)</span>
+            <span style="font-weight:700;">
+              <span class="${item["Pain q 8 hr : ฟอร์มปรอท"] === 'YES' ? 'text-yes' : 'text-no'}">${item["Pain q 8 hr : ฟอร์มปรอท"] || '-'}</span> / 
+              <span class="${item["Pain q 8 hr : Nurse Note"] === 'YES' ? 'text-yes' : 'text-no'}">${item["Pain q 8 hr : Nurse Note"] || '-'}</span>
+            </span>
+          </div>
+          
+          ${isSevere ? `
+            <div style="grid-column: 1 / -1; background:#fff7ed; padding:6px 10px; border-radius:6px; border-left:3px solid #f97316;">
+              <span style="font-size:0.72rem; color:#c2410c; font-weight:700; display:block;">การจัดการความปวดรุนแรง:</span>
+              <span style="color:#9a3412; font-size:0.8rem;">
+                Intervention: <strong>${item["Intervention"] || '-'}</strong> | 
+                Re-assessment: <strong class="${item["Re-assessment"] === 'YES' ? 'text-yes' : ''}">${item["Re-assessment"] || '-'}</strong>
+              </span>
+            </div>
+          ` : ''}
+
+          ${isSurgery ? `
+            <div style="grid-column: 1 / -1; background:#f0fdf4; padding:6px 10px; border-radius:6px; border-left:3px solid #10b981;">
+              <span style="font-size:0.72rem; color:#15803d; font-weight:700; display:block;">การดูแลหลังผ่าตัด (Post-op):</span>
+              <span style="color:#166534; font-size:0.8rem;">
+                ปรอท: <strong>${item["Pain post-op แรกรับ : ฟอร์มปรอท"] || '-'}</strong> | 
+                Note: <strong>${item["Pain post-op แรกรับ : Nurse Note"] || '-'}</strong> | 
+                Guideline: <strong class="${item["Guideline Post-op"] === 'YES' ? 'text-yes' : ''}">${item["Guideline Post-op"] || '-'}</strong>
+              </span>
+            </div>
+          ` : ''}
+
+        </div>
+        
+        ${item["หมายเหตุ"] ? `
+          <div style="margin-top:8px; font-size:0.78rem; color:#475569; background:#fff1f2; padding:6px 10px; border-radius:6px; border-left:3px solid #f43f5e;">
+            <strong style="color:#be123c;">หมายเหตุ:</strong> ${item["หมายเหตุ"]}
+          </div>
+        ` : ''}
+
+        <div style="margin-top:10px; display:flex; justify-content:flex-end;">
+          <button class="btn-secondary" style="padding:4px 12px; font-size:0.75rem; border-radius:20px;" onclick="fillFormForAN('${hnDisplay}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
+            <i class="fa-solid fa-clone"></i> ลงข้อมูลต่อจาก HN นี้
+          </button>
+        </div>
+
+      </div>
+    `;
+  });
+  
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+/**
+ * แสดงผลแบบตาราง Google Sheet (Spreadsheet Table View)
+ */
+function renderSpreadsheetTableView(list, container) {
+  let html = `
+    <div class="sheet-table-wrapper">
+      <table class="sheet-table">
+        <thead>
+          <tr>
+            <th>ลำดับ</th>
+            <th>HN</th>
+            <th>Tool</th>
+            <th>แรกรับ:ปรอท</th>
+            <th>แรกรับ:Note</th>
+            <th>q8:ปรอท</th>
+            <th>q8:Note</th>
+            <th>Pain ≥ 5</th>
+            <th>Intervention</th>
+            <th>Re-assess</th>
+            <th>Surgery</th>
+            <th>Post-op ปรอท</th>
+            <th>Post-op Note</th>
+            <th>Guideline</th>
+            <th>หมายเหตุ</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+  
+  list.forEach((item, idx) => {
+    const isSevere = String(item["Pain ≥ 5**"]).toUpperCase() === "YES";
+    const rowNum = item["_rowIndex"] ? item._rowIndex - 2 : (idx + 1);
+    const hn = item["HN"] || item["AN"] || "-";
+    
+    html += `
+      <tr class="${isSevere ? 'row-severe' : ''}">
+        <td style="font-weight:700; color:#64748b;">${rowNum}</td>
+        <td><span class="hn-tag">${hn}</span></td>
+        <td>${item["Tool"] || "-"}</td>
+        <td><span class="${badgeTagClass(item["Pain แรกรับ : ฟอร์มปรอท"])}">${item["Pain แรกรับ : ฟอร์มปรอท"] || "-"}</span></td>
+        <td><span class="${badgeTagClass(item["Pain แรกรับ : Nurse note"])}">${item["Pain แรกรับ : Nurse note"] || "-"}</span></td>
+        <td><span class="${badgeTagClass(item["Pain q 8 hr : ฟอร์มปรอท"])}">${item["Pain q 8 hr : ฟอร์มปรอท"] || "-"}</span></td>
+        <td><span class="${badgeTagClass(item["Pain q 8 hr : Nurse Note"])}">${item["Pain q 8 hr : Nurse Note"] || "-"}</span></td>
+        <td><span class="${badgeTagClass(item["Pain ≥ 5**"], true)}">${item["Pain ≥ 5**"] || "NO"}</span></td>
+        <td>${item["Intervention"] || "-"}</td>
+        <td><span class="${badgeTagClass(item["Re-assessment"])}">${item["Re-assessment"] || "-"}</span></td>
+        <td><span class="${badgeTagClass(item["Operation Surgery"])}">${item["Operation Surgery"] || "NO"}</span></td>
+        <td><span class="${badgeTagClass(item["Pain post-op แรกรับ : ฟอร์มปรอท"])}">${item["Pain post-op แรกรับ : ฟอร์มปรอท"] || "-"}</span></td>
+        <td><span class="${badgeTagClass(item["Pain post-op แรกรับ : Nurse Note"])}">${item["Pain post-op แรกรับ : Nurse Note"] || "-"}</span></td>
+        <td><span class="${badgeTagClass(item["Guideline Post-op"])}">${item["Guideline Post-op"] || "-"}</span></td>
+        <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis;" title="${item["หมายเหตุ"] || ''}">${item["หมายเหตุ"] || "-"}</td>
+        <td>
+          <button class="icon-btn" style="width:28px; height:28px; font-size:0.75rem;" title="ลงข้อมูลต่อจาก HN นี้" onclick="fillFormForAN('${hn}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+  
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+  
+  container.innerHTML = html;
+}
+
+function badgeTagClass(val, isSevereColumn = false) {
+  const v = String(val || "").toUpperCase();
+  if (v === "YES") return isSevereColumn ? "badge badge-pain-alert" : "badge-tag-yes";
+  if (v === "NO") return "badge-tag-no";
+  return "badge-tag-dash";
+}
+
+function updateFilterChipCounts() {
+  const all = state.records.length;
+  const severe = state.records.filter(r => String(r["Pain ≥ 5**"]).toUpperCase() === "YES").length;
+  const surgery = state.records.filter(r => String(r["Operation Surgery"]).toUpperCase() === "YES").length;
+  const incomplete = state.records.filter(r => 
+    String(r["Pain แรกรับ : ฟอร์มปรอท"]).toUpperCase() !== "YES" || 
+    String(r["Pain แรกรับ : Nurse note"]).toUpperCase() !== "YES"
+  ).length;
+  
+  const elAll = document.getElementById("countAll");
+  const elSevere = document.getElementById("countSevere");
+  const elSurgery = document.getElementById("countSurgery");
+  const elIncomplete = document.getElementById("countIncomplete");
+  
+  if (elAll) elAll.textContent = all;
+  if (elSevere) elSevere.textContent = severe;
+  if (elSurgery) elSurgery.textContent = surgery;
+  if (elIncomplete) elIncomplete.textContent = incomplete;
+}
+
+/**
+ * เติมข้อมูล HN ในฟอร์มเพื่อบันทึกแถวใหม่
+ */
+window.fillFormForAN = function(hn, latestRecord = null) {
+  switchTab("form");
+  elements.inputAN.value = hn;
+  
+  if (latestRecord) {
+    if (latestRecord["Tool"] && elements.selectTool) elements.selectTool.value = latestRecord["Tool"];
+    if (latestRecord["Operation Surgery"] && elements.selectSurgery) elements.selectSurgery.value = latestRecord["Operation Surgery"];
+  }
+  
   updatePainConditionUI();
   updateSurgeryConditionUI();
   
-  // หากต้องการดูประวัติทันที สามารถสลับไปหน้าประวัติ AN ได้
-  elements.searchANInput.value = an;
-  switchTab("history");
-  performSearchAN(an);
+  document.getElementById("panelForm").scrollIntoView({ behavior: "smooth" });
+  showToast(`ระบบเตรียมฟอร์มสำหรับ HN ${hn} แล้ว`, "success");
+};
+
+window.copyHN = function(hn) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(hn).then(() => {
+      showToast(`คัดลอก HN ${hn} แล้ว`, "info");
+    });
+  }
+};
+
+/**
+ * Render KPI Cards ด้านบน
+ */
+function renderKPIs() {
+  const total = state.records.length;
+  
+  // Pain แรกรับ YES ทั้งคู่ (ปรอท + Note)
+  const painFirstYes = state.records.filter(r => 
+    String(r["Pain แรกรับ : ฟอร์มปรอท"]).toUpperCase() === "YES" && 
+    String(r["Pain แรกรับ : Nurse note"]).toUpperCase() === "YES"
+  ).length;
+  
+  // Pain q 8 hr YES ทั้งคู่
+  const painQ8Yes = state.records.filter(r => 
+    String(r["Pain q 8 hr : ฟอร์มปรอท"]).toUpperCase() === "YES" && 
+    String(r["Pain q 8 hr : Nurse Note"]).toUpperCase() === "YES"
+  ).length;
+  
+  const surgeryYes = state.records.filter(r => 
+    String(r["Operation Surgery"]).toUpperCase() === "YES"
+  ).length;
+  
+  const guidelineYes = state.records.filter(r => 
+    String(r["Guideline Post-op"]).toUpperCase() === "YES"
+  ).length;
+  
+  const painOver5Yes = state.records.filter(r => 
+    String(r["Pain ≥ 5**"]).toUpperCase() === "YES"
+  ).length;
+  
+  const elTotal = document.getElementById("kpiTotal");
+  const elPainFirst = document.getElementById("kpiPainFirst");
+  const elPainQ8 = document.getElementById("kpiPainQ8");
+  const elSurgery = document.getElementById("kpiSurgery");
+  const elGuideline = document.getElementById("kpiGuideline");
+  const elPainOver5 = document.getElementById("kpiPainOver5");
+  
+  if (elTotal) elTotal.textContent = total;
+  if (elPainFirst) elPainFirst.textContent = total > 0 ? `${painFirstYes} (${Math.round((painFirstYes / total) * 100)}%)` : "0";
+  if (elPainQ8) elPainQ8.textContent = total > 0 ? `${painQ8Yes} (${Math.round((painQ8Yes / total) * 100)}%)` : "0";
+  if (elSurgery) elSurgery.textContent = surgeryYes;
+  if (elGuideline) elGuideline.textContent = surgeryYes > 0 ? `${guidelineYes} (${Math.round((guidelineYes / surgeryYes) * 100)}%)` : (total > 0 ? `${guidelineYes}` : "0");
+  if (elPainOver5) elPainOver5.textContent = total > 0 ? `${painOver5Yes} (${Math.round((painOver5Yes / total) * 100)}%)` : "0";
 }
 
 /**
- * ส่งข้อมูลเข้า Google Apps Script ผ่าน POST
+ * Render QA Analytics ในแท็บสรุปผล
  */
-async function sendRecordToGoogleSheet(record) {
-  const url = state.googleScriptUrl;
-  if (!url) return;
+function renderAnalytics() {
+  const total = state.records.length;
+  const containerQA = document.getElementById("qaMetricsContainer");
+  const containerTools = document.getElementById("toolStatsContainer");
   
-  // Google Apps Script Web App รองรับ POST with JSON payload หรือ urlencoded
-  const response = await fetch(url, {
-    method: "POST",
-    mode: "no-cors", // เพื่อป้องกัน CORS Block จาก Google Script redirect
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(record)
-  });
+  if (!containerQA) return;
   
-  return response;
+  if (total === 0) {
+    containerQA.innerHTML = `<p style="color:#94a3b8; font-size:0.85rem;">ยังไม่มีข้อมูลในเดือนนี้</p>`;
+    return;
+  }
+  
+  // 1. ตัวชี้วัดคุณภาพ QA
+  const firstYes = state.records.filter(r => 
+    String(r["Pain แรกรับ : ฟอร์มปรอท"]).toUpperCase() === "YES" && 
+    String(r["Pain แรกรับ : Nurse note"]).toUpperCase() === "YES"
+  ).length;
+  const pctFirst = Math.round((firstYes / total) * 100);
+  
+  const q8Yes = state.records.filter(r => 
+    String(r["Pain q 8 hr : ฟอร์มปรอท"]).toUpperCase() === "YES" && 
+    String(r["Pain q 8 hr : Nurse Note"]).toUpperCase() === "YES"
+  ).length;
+  const pctQ8 = Math.round((q8Yes / total) * 100);
+  
+  const severeList = state.records.filter(r => String(r["Pain ≥ 5**"]).toUpperCase() === "YES");
+  const severeCount = severeList.length;
+  const pctSevere = Math.round((severeCount / total) * 100);
+  
+  const severeReassess = severeList.filter(r => String(r["Re-assessment"]).toUpperCase() === "YES").length;
+  const pctReassess = severeCount > 0 ? Math.round((severeReassess / severeCount) * 100) : 100;
+  
+  const surgeryList = state.records.filter(r => String(r["Operation Surgery"]).toUpperCase() === "YES");
+  const surgeryCount = surgeryList.length;
+  const pctSurgery = Math.round((surgeryCount / total) * 100);
+  
+  const surgeryGuide = surgeryList.filter(r => String(r["Guideline Post-op"]).toUpperCase() === "YES").length;
+  const pctGuide = surgeryCount > 0 ? Math.round((surgeryGuide / surgeryCount) * 100) : 100;
+  
+  containerQA.innerHTML = `
+    <div class="qa-metric-row">
+      <div class="qa-metric-top">
+        <span class="qa-metric-title">1. การประเมินแรกรับครบถ้วน (ปรอท + Note = YES)</span>
+        <span class="qa-metric-pct" style="color:${pctFirst >= 90 ? '#10b981' : '#f59e0b'};">${pctFirst}% (${firstYes}/${total})</span>
+      </div>
+      <div class="qa-progress-bg">
+        <div class="qa-progress-fill" style="width:${pctFirst}%; background:${pctFirst >= 90 ? '#10b981' : '#f59e0b'};"></div>
+      </div>
+    </div>
+
+    <div class="qa-metric-row">
+      <div class="qa-metric-top">
+        <span class="qa-metric-title">2. การประเมิน Pain q 8 hr ครบถ้วน (ปรอท + Note = YES)</span>
+        <span class="qa-metric-pct" style="color:${pctQ8 >= 90 ? '#10b981' : '#f59e0b'};">${pctQ8}% (${q8Yes}/${total})</span>
+      </div>
+      <div class="qa-progress-bg">
+        <div class="qa-progress-fill" style="width:${pctQ8}%; background:${pctQ8 >= 90 ? '#10b981' : '#f59e0b'};"></div>
+      </div>
+    </div>
+
+    <div class="qa-metric-row">
+      <div class="qa-metric-top">
+        <span class="qa-metric-title">3. อัตราเกิด Pain ≥ 5 (ปวดรุนแรง)</span>
+        <span class="qa-metric-pct" style="color:#ef4444;">${pctSevere}% (${severeCount}/${total})</span>
+      </div>
+      <div class="qa-progress-bg">
+        <div class="qa-progress-fill" style="width:${pctSevere}%; background:#ef4444;"></div>
+      </div>
+    </div>
+
+    <div class="qa-metric-row">
+      <div class="qa-metric-top">
+        <span class="qa-metric-title">4. การประเมินซ้ำ (Re-assessment) ในเคส Pain ≥ 5</span>
+        <span class="qa-metric-pct" style="color:${pctReassess >= 90 ? '#10b981' : '#f59e0b'};">${pctReassess}% (${severeReassess}/${severeCount || 1})</span>
+      </div>
+      <div class="qa-progress-bg">
+        <div class="qa-progress-fill" style="width:${pctReassess}%; background:${pctReassess >= 90 ? '#10b981' : '#f59e0b'};"></div>
+      </div>
+    </div>
+
+    <div class="qa-metric-row">
+      <div class="qa-metric-top">
+        <span class="qa-metric-title">5. ปฏิบัติตาม Guideline ในเคสผ่าตัด</span>
+        <span class="qa-metric-pct" style="color:${pctGuide >= 90 ? '#10b981' : '#f59e0b'};">${pctGuide}% (${surgeryGuide}/${surgeryCount || 1})</span>
+      </div>
+      <div class="qa-progress-bg">
+        <div class="qa-progress-fill" style="width:${pctGuide}%; background:${pctGuide >= 90 ? '#10b981' : '#f59e0b'};"></div>
+      </div>
+    </div>
+  `;
+  
+  // 2. สัดส่วน Tools
+  if (containerTools) {
+    const toolCounts = {};
+    state.records.forEach(r => {
+      const t = r["Tool"] || "Numeric Rating Score";
+      toolCounts[t] = (toolCounts[t] || 0) + 1;
+    });
+    
+    containerTools.innerHTML = Object.entries(toolCounts).map(([toolName, count]) => {
+      const pct = Math.round((count / total) * 100);
+      return `
+        <div class="stat-bar-row">
+          <div class="stat-bar-header">
+            <span>${toolName}</span>
+            <span><strong>${count} ราย</strong> (${pct}%)</span>
+          </div>
+          <div class="qa-progress-bg">
+            <div class="qa-progress-fill" style="width:${pct}%; background:#0284c7;"></div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
 }
 
 /**
- * JSONP Loader สำหรับข้าม CORS ของ Google Apps Script ได้ 100%
+ * คำสำคัญที่บ่งบอกว่าเป็นชีตประจำเดือน
  */
-function fetchJsonp(url, params = {}) {
-  return new Promise((resolve, reject) => {
-    const callbackName = "jsonp_cb_" + Math.round(100000 * Math.random());
-    const queryParams = new URLSearchParams({ ...params, callback: callbackName, _t: Date.now() });
-    const fullUrl = `${url}${url.includes('?') ? '&' : '?'}${queryParams.toString()}`;
-    
-    const script = document.createElement("script");
-    script.src = fullUrl;
-    
-    // ตั้ง timeout 10 วินาที
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error("เชื่อมต่อ Google Sheet นานเกินไป (Timeout)"));
-    }, 10000);
-    
-    function cleanup() {
-      if (window[callbackName]) delete window[callbackName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-      clearTimeout(timer);
-    }
-    
-    window[callbackName] = function(data) {
-      cleanup();
-      resolve(data);
-    };
-    
-    script.onerror = function() {
-      cleanup();
-      reject(new Error("การเชื่อมต่อถูกปฏิเสธ (ตรวจสอบสิทธิ์ 'Anyone' ใน Web App Deployment)"));
-    };
-    
-    document.head.appendChild(script);
-  });
-}
-
-// คำสำคัญที่บ่งบอกว่าเป็นชีตประจำเดือน
 const MONTH_KEYWORDS = [
   "ม.ค", "ก.พ", "มี.ค", "เม.ย", "พ.ค", "มิ.ย", "ก.ค", "ส.ค", "ก.ย", "ต.ค", "พ.ย", "ธ.ค",
   "มกรา", "กุมภา", "มีนา", "เมษา", "พฤษภา", "มิถุนา", "กรกฎา", "สิงหา", "กันยา", "ตุลา", "พฤศจิกา", "ธันวา",
@@ -677,7 +1179,7 @@ function isMonthYearSheetName(name) {
   const str = String(name).trim();
   const lower = str.toLowerCase();
   
-  // ตัดชีตระบบและชีตที่ไม่ใช่เดือนทิ้ง
+  // ตัดชีตระบบทิ้ง
   if (lower === "pain_data" || lower === "ค้นหา_an" || lower.startsWith("sheet") || lower.startsWith("ชีต")) return false;
   if (/^(setting|config|template|summary|สรุป|dashboard|temp)/i.test(str)) return false;
   
@@ -687,25 +1189,19 @@ function isMonthYearSheetName(name) {
   return hasMonth || hasDatePattern;
 }
 
-/**
- * จัดการรายชื่อ Work Sheet / แท็บประจำเดือน (แสดงเฉพาะ เดือน ปี เท่านั้น)
- */
 function populateSheetDropdowns(sheets, activeSheet = "") {
   let filteredSheets = [];
   
   if (Array.isArray(sheets)) {
-    // 1. กรองเฉพาะชีตที่เป็น "เดือน ปี" เท่านั้น
     filteredSheets = sheets.filter(s => isMonthYearSheetName(s));
   }
   
-  // ถ้าในชีตยังไม่มีชีตเดือนเลย ให้แสดงรายการเดือนภาษาไทยเริ่มต้น
   if (filteredSheets.length === 0) {
-    filteredSheets = ["ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567", "กรกฎาคม 2567"];
+    filteredSheets = ["ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567"];
   }
   
   state.sheets = filteredSheets;
   
-  // เลือกว่าจะ active ชีตไหน
   if (!activeSheet || !filteredSheets.includes(activeSheet)) {
     activeSheet = filteredSheets[0];
   }
@@ -729,8 +1225,7 @@ function populateSheetDropdowns(sheets, activeSheet = "") {
 
 async function fetchSheetList(forceRefresh = false) {
   if (!state.googleScriptUrl) {
-    // โหมดออฟไลน์: ใส่รายชื่อเดือนเริ่มต้น
-    populateSheetDropdowns(["ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567", "กรกฎาคม 2567"]);
+    populateSheetDropdowns(["ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567"]);
     return;
   }
   
@@ -746,7 +1241,7 @@ async function fetchSheetList(forceRefresh = false) {
     if (result && result.status === "success" && Array.isArray(result.sheets)) {
       populateSheetDropdowns(result.sheets, state.currentSheet);
       if (forceRefresh) {
-        showToast(`อัปเดตรายชื่อเดือนเรียบร้อย (พบ ${state.sheets.length} เดือน)`, "success");
+        showToast(`อัปเดตรายชื่อชีตเรียบร้อย (พบ ${state.sheets.length} เดือน)`, "success");
       }
     }
   } catch (err) {
@@ -755,34 +1250,23 @@ async function fetchSheetList(forceRefresh = false) {
 }
 
 /**
- * ดึงข้อมูลทั้งหมดจาก Google Sheet ตาม Work Sheet ที่เลือก (ลองทั้ง Fetch และ JSONP)
+ * ดึงข้อมูลผู้ป่วยจากชีตประจำเดือนที่เลือก
  */
 async function fetchFromGoogleSheet(targetSheet = "") {
   const sheetToFetch = targetSheet || state.currentSheet || "";
   
   if (!state.googleScriptUrl) {
-    // โหมดออฟไลน์ / ทดสอบ: กรองหรือจำลองข้อมูลตามเดือนที่เลือก
+    // ข้อมูลตัวอย่าง
     state.currentSheet = sheetToFetch;
-    
-    // จำลองชุดข้อมูลตามเดือนที่เลือกเพื่อให้เห็นการเปลี่ยนแปลงชัดเจน
     if (sheetToFetch.includes("กันยา")) {
-      state.records = INITIAL_DEMO_RECORDS.slice(1, 3);
+      state.records = INITIAL_DEMO_RECORDS.slice(1, 4);
     } else if (sheetToFetch.includes("สิงหา")) {
-      state.records = INITIAL_DEMO_RECORDS.slice(2, 4);
-    } else if (sheetToFetch.includes("กรกฎา")) {
-      state.records = INITIAL_DEMO_RECORDS.slice(3, 5);
+      state.records = INITIAL_DEMO_RECORDS.slice(2, 5);
     } else {
       state.records = INITIAL_DEMO_RECORDS;
     }
-    
-    saveRecordsToLocal();
     renderKPIs();
-    if (state.currentTab === "dashboard") {
-      renderDashboardAnalytics();
-    } else if (state.currentTab === "history") {
-      performSearchAN(elements.searchANInput.value.trim());
-    }
-    showToast(`อัปเดตข้อมูลเดือน ${sheetToFetch} แล้ว (พบ ${state.records.length} รายการ)`, "success");
+    renderHistoryView();
     return;
   }
   
@@ -791,402 +1275,196 @@ async function fetchFromGoogleSheet(targetSheet = "") {
   
   try {
     let result = null;
-    const params = { action: "getData" };
-    if (sheetToFetch) params.sheet = sheetToFetch;
+    const url = `${state.googleScriptUrl}?action=getAll&sheetName=${encodeURIComponent(sheetToFetch)}&_t=${Date.now()}`;
     
-    // ลองด้วย Fetch ปกติก่อน
     try {
-      const queryStr = new URLSearchParams({ ...params, _t: Date.now() }).toString();
-      const fetchUrl = `${state.googleScriptUrl}?${queryStr}`;
-      const response = await fetch(fetchUrl);
-      result = await response.json();
+      const res = await fetch(url);
+      result = await res.json();
     } catch (fetchErr) {
-      // ถ้า fetch ติด CORS ให้ fallback ไปใช้ JSONP
-      result = await fetchJsonp(state.googleScriptUrl, params);
+      result = await fetchJsonp(state.googleScriptUrl, { 
+        action: "getAll", 
+        sheetName: sheetToFetch 
+      });
     }
     
-    if (result && result.status === "success") {
-      if (Array.isArray(result.sheets) && result.sheets.length > 0) {
-        populateSheetDropdowns(result.sheets, result.currentSheet || sheetToFetch);
-      }
-      
-      if (Array.isArray(result.data)) {
-        state.records = result.data.map(normalizeRecord);
-        saveRecordsToLocal();
-        renderKPIs();
-        
-        // อัปเดตหน้าปัจจุบันตามข้อมูลเดือนใหม่ทันที
-        if (state.currentTab === "dashboard") {
-          renderDashboardAnalytics();
-        } else if (state.currentTab === "history") {
-          performSearchAN(elements.searchANInput.value.trim());
-        }
-        
-        const sheetLabel = result.currentSheet || sheetToFetch;
-        showToast(`อัปเดตข้อมูลเดือน ${sheetLabel} สำเร็จ! (${result.data.length} รายการ)`, "success");
-      }
+    if (result && result.status === "success" && Array.isArray(result.data)) {
+      state.records = result.data.map(r => normalizeRecord(r));
+      state.currentSheet = sheetToFetch;
+      saveRecordsToLocal();
+      renderKPIs();
+      renderHistoryView();
+      showToast(`โหลดข้อมูลชีต "${sheetToFetch}" สำเร็จ (${result.count || state.records.length} รายการ)`, "success");
+    } else {
+      throw new Error(result ? result.message : "ข้อมูลไม่ถูกต้อง");
     }
-  } catch (e) {
-    console.log("Could not fetch remote sheet data:", e);
-    showToast(`ไม่สามารถดึงข้อมูลเดือน ${sheetToFetch}: ${e.message}`, "warning");
+    
+  } catch (err) {
+    console.warn("Failed to fetch from Google Sheet:", err);
+    showToast(`เชื่อมต่อชีตไม่ได้: ${err.message}`, "warning");
+    loadStoredRecords();
   } finally {
     state.isOnlineSyncing = false;
     updateSyncStatusBadge();
   }
 }
 
-async function testGoogleSheetConnection(url) {
-  // 1. ตรวจสอบรูปแบบ URL เบื้องต้น
-  if (!url.startsWith("https://script.google.com/macros/s/")) {
-    showToast("URL ต้องขึ้นต้นด้วย https://script.google.com/macros/s/...", "error");
-    return;
-  }
-  
-  if (url.includes("/edit") || !url.endsWith("/exec")) {
-    showToast("URL ต้องลงท้ายด้วย /exec (ได้จากปุ่ม Deploy > New Deployment > Web app)", "error");
-    return;
-  }
-
-  elements.btnTestSync.disabled = true;
-  elements.btnTestSync.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังทดสอบ...`;
-  
-  try {
-    let result = null;
+function fetchJsonp(url, params = {}, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    const callbackName = "jsonp_cb_" + Math.round(100000 * Math.random());
+    const query = new URLSearchParams({ ...params, callback: callbackName, _t: Date.now() });
+    const fullUrl = url.includes("?") ? `${url}&${query.toString()}` : `${url}?${query.toString()}`;
     
-    try {
-      const testUrl = `${url}?action=getData&_t=${Date.now()}`;
-      const response = await fetch(testUrl);
-      result = await response.json();
-    } catch (e) {
-      // ลองผ่าน JSONP fallback
-      result = await fetchJsonp(url, { action: "getData" });
+    const script = document.createElement("script");
+    script.src = fullUrl;
+    
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("การเชื่อมต่อหมดเวลา (Timeout)"));
+    }, timeout);
+    
+    function cleanup() {
+      if (window[callbackName]) delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
     }
     
-    if (result && result.status === "success") {
-      const count = result.data ? result.data.length : 0;
-      showToast(`เชื่อมต่อ Google Sheet สำเร็จ! 🎉 (พบข้อมูล ${count} รายการ)`, "success");
-    } else {
-      showToast(`เชื่อมต่อได้แต่ระบบตอบกลับผิดปกติ: ${result?.message || 'ไม่ทราบสาเหตุ'}`, "warning");
-    }
-  } catch (err) {
-    showToast(err.message || "ไม่สามารถเชื่อมต่อได้: โปรดตรวจสอบว่าเลือก 'Anyone' ใน Web App", "error");
-  } finally {
-    elements.btnTestSync.disabled = false;
-    elements.btnTestSync.innerHTML = `<i class="fa-solid fa-plug-circle-check"></i> ทดสอบการเชื่อมต่อ`;
-  }
+    window[callbackName] = function(data) {
+      cleanup();
+      resolve(data);
+    };
+    
+    script.onerror = function() {
+      cleanup();
+      reject(new Error("การเชื่อมต่อถูกปฏิเสธ (ตรวจสอบสิทธิ์ 'Anyone' ใน Web App Deployment)"));
+    };
+    
+    document.head.appendChild(script);
+  });
 }
 
 function updateSyncStatusBadge() {
   if (!elements.syncStatusText) return;
   
-  if (!state.googleScriptUrl) {
-    elements.syncStatusText.innerHTML = `<i class="fa-solid fa-database"></i> ฐานข้อมูลในเครื่อง (พร้อมต่อ Google Sheet)`;
-    elements.syncStatusText.style.background = "#f1f5f9";
-    elements.syncStatusText.style.color = "#64748b";
-  } else if (state.isOnlineSyncing) {
-    elements.syncStatusText.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> กำลังซิงค์ Google Sheet...`;
-    elements.syncStatusText.style.background = "#fef3c7";
-    elements.syncStatusText.style.color = "#b45309";
-  } else {
-    elements.syncStatusText.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> เชื่อมต่อ Google Sheet แล้ว`;
-    elements.syncStatusText.style.background = "#d1fae5";
+  if (state.isOnlineSyncing) {
+    elements.syncStatusText.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#4f46e5;"></i> กำลังเชื่อมต่อชีต...`;
+    elements.syncStatusText.style.background = "#eef2ff";
+    elements.syncStatusText.style.color = "#4338ca";
+  } else if (state.googleScriptUrl) {
+    elements.syncStatusText.innerHTML = `<i class="fa-solid fa-cloud-arrow-down" style="color:#10b981;"></i> Google Sheet: ออนไลน์`;
+    elements.syncStatusText.style.background = "#dcfce7";
     elements.syncStatusText.style.color = "#065f46";
-  }
-}
-
-/**
- * ระบบค้นหาประวัติ AN (สอดคล้องกับชีต ค้นหา_AN)
- * แสดงประวัติทั้งหมดของ AN นั้น เรียงจากรายการล่าสุดไปเก่าสุด
- */
-function performSearchAN(anQuery) {
-  state.activeSearchAN = anQuery;
-  
-  if (!anQuery) {
-    renderAllHistory();
-    return;
-  }
-  
-  const filtered = state.records.filter(r => 
-    String(r["AN"] || "").trim().toLowerCase() === anQuery.toLowerCase()
-  );
-  
-  // เรียงจากล่าสุดไปเก่าสุด
-  filtered.sort((a, b) => new Date(b["วันที่และเวลา"] || 0) - new Date(a["วันที่และเวลา"] || 0));
-  
-  renderHistoryView(anQuery, filtered);
-}
-
-function renderAllHistory() {
-  const sorted = [...state.records].sort((a, b) => new Date(b["วันที่และเวลา"] || 0) - new Date(a["วันที่และเวลา"] || 0));
-  renderHistoryView("", sorted);
-}
-
-function renderHistoryView(anQuery, list) {
-  const container = elements.historyResultsContainer;
-  
-  if (!container) return;
-  
-  if (anQuery) {
-    elements.historySearchTitle.innerHTML = `
-      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-        <span class="an-pill"><i class="fa-solid fa-user"></i> AN: ${anQuery} (${list.length} รายการประเมิน)</span>
-        <button class="btn-add-for-an" id="btnAddForSearchedAN" data-an="${anQuery}">
-          <i class="fa-solid fa-circle-plus"></i> บันทึกข้อมูลเพิ่มสำหรับ AN นี้
-        </button>
-      </div>
-    `;
-    
-    // Bind click to auto-fill form for this AN
-    const btnAdd = document.getElementById("btnAddForSearchedAN");
-    if (btnAdd) {
-      btnAdd.addEventListener("click", () => {
-        fillFormForAN(anQuery, list[0] || null);
-      });
-    }
   } else {
-    elements.historySearchTitle.innerHTML = `
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <h4 style="font-weight:700; color:#1e1b4b;"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติการประเมินทั้งหมด (${list.length} รายการล่าสุด)</h4>
-      </div>
-    `;
+    elements.syncStatusText.innerHTML = `<i class="fa-solid fa-database" style="color:#64748b;"></i> ข้อมูลตัวอย่าง (ออฟไลน์)`;
+    elements.syncStatusText.style.background = "#f1f5f9";
+    elements.syncStatusText.style.color = "#475569";
   }
-  
-  if (list.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <i class="fa-regular fa-folder-open"></i>
-        <p style="font-weight:600; font-size:1rem; color:#475569;">ไม่พบประวัติการประเมินสำหรับ AN: ${anQuery}</p>
-        <p style="font-size:0.85rem; color:#94a3b8; margin-top:4px;">หากต้องการบันทึกเป็นคนไข้รายใหม่ สามารถกดเริ่มกรอกแบบฟอร์มได้ทันที</p>
-        <button class="btn-primary" style="margin-top:16px;" onclick="fillFormForAN('${anQuery}', null)">
-          <i class="fa-solid fa-plus"></i> เริ่มบันทึก AN ${anQuery}
-        </button>
-      </div>
-    `;
+}
+
+function saveRecordsToLocal() {
+  try {
+    localStorage.setItem("painApp_records", JSON.stringify(state.records));
+  } catch (e) {}
+}
+
+function loadStoredRecords() {
+  try {
+    const raw = localStorage.getItem("painApp_records");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        state.records = parsed.map(r => normalizeRecord(r));
+        return;
+      }
+    }
+  } catch (e) {}
+  state.records = INITIAL_DEMO_RECORDS.map(r => normalizeRecord(r));
+}
+
+// Settings Modal
+function openSettingsModal() {
+  if (elements.scriptUrlInput) {
+    elements.scriptUrlInput.value = state.googleScriptUrl;
+  }
+  if (elements.settingsModal) {
+    elements.settingsModal.classList.add("active");
+  }
+}
+
+function closeSettingsModal() {
+  if (elements.settingsModal) {
+    elements.settingsModal.classList.remove("active");
+  }
+}
+
+function saveSettings() {
+  const url = (elements.scriptUrlInput ? elements.scriptUrlInput.value : "").trim();
+  if (url && !url.startsWith("https://script.google.com/macros/s/")) {
+    showToast("URL ต้องขึ้นต้นด้วย https://script.google.com/macros/s/...", "error");
     return;
   }
   
-  let html = `<div class="timeline-list">`;
+  state.googleScriptUrl = url;
+  localStorage.setItem("painApp_scriptUrl", url);
+  closeSettingsModal();
+  updateSyncStatusBadge();
   
-  list.forEach(item => {
-    const isSevere = item["Pain ≥ 5**"] === "YES";
-    const isSurgery = item["Operation Surgery"] === "YES";
-    const datetimeStr = item["วันที่และเวลา"] || "ไม่ระบุเวลา";
+  if (url) {
+    showToast("บันทึกการตั้งค่าแล้ว กำลังดึงรายชื่อชีต...", "success");
+    fetchSheetList(true).then(() => {
+      fetchFromGoogleSheet();
+    });
+  } else {
+    showToast("ล้างการเชื่อมต่อ Google Sheet แล้ว", "info");
+  }
+}
+
+async function testConnection() {
+  const url = (elements.scriptUrlInput ? elements.scriptUrlInput.value : "").trim();
+  if (!url) {
+    showToast("กรุณากรอก Google Apps Script Web App URL", "warning");
+    return;
+  }
+  
+  const origBtnText = elements.btnTestSync.innerHTML;
+  elements.btnTestSync.disabled = true;
+  elements.btnTestSync.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังทดสอบ...`;
+  
+  try {
+    let result = null;
+    try {
+      const res = await fetch(`${url}?action=getSheets&_t=${Date.now()}`);
+      result = await res.json();
+    } catch (e) {
+      result = await fetchJsonp(url, { action: "getSheets" });
+    }
     
-    html += `
-      <div class="timeline-item ${isSevere ? 'severe-pain' : ''}">
-        <div class="timeline-top">
-          <div class="timeline-time">
-            <i class="fa-regular fa-calendar-check" style="color:#4f46e5;"></i>
-            ${datetimeStr}
-          </div>
-          <div class="timeline-recorder">
-            <i class="fa-solid fa-user-nurse"></i> ${item["ผู้บันทึก"] || "ไม่ระบุ"}
-          </div>
-        </div>
-        
-        <div class="timeline-badges">
-          <span class="badge badge-ward"><i class="fa-solid fa-hospital-user"></i> หอผู้ป่วย ${item["หน่วยงาน"]}</span>
-          <span class="badge badge-tool"><i class="fa-solid fa-ruler-combined"></i> ${item["Tool"]}</span>
-          
-          ${isSevere 
-            ? `<span class="badge badge-pain-alert"><i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5</span>` 
-            : `<span class="badge badge-ok"><i class="fa-solid fa-check"></i> Pain &lt; 5</span>`}
-            
-          ${isSurgery 
-            ? `<span class="badge badge-surgery"><i class="fa-solid fa-syringe"></i> ผ่าตัด (Surgery)</span>` 
-            : ``}
-        </div>
-        
-        <div class="timeline-details-grid">
-          <div class="detail-cell">
-            <span class="d-label">Pain แรกรับ (ปรอท / Nurse Note)</span>
-            <span class="d-val">${item["Pain แรกรับ : ฟอร์มปรอท"] || '-'} / ${item["Pain แรกรับ : Nurse note"] || '-'}</span>
-          </div>
-          
-          <div class="detail-cell">
-            <span class="d-label">Pain q 8 hr (ฟอร์มปรอท)</span>
-            <span class="d-val">${item["Pain q 8 hr : ฟอร์มปรอท"] || '-'}</span>
-          </div>
-          
-          ${isSevere ? `
-            <div class="detail-cell" style="background:#fff7ed; padding:4px 6px; border-radius:4px;">
-              <span class="d-label" style="color:#c2410c;">Intervention</span>
-              <span class="d-val" style="color:#9a3412;">${item["Intervention"] || '-'}</span>
-            </div>
-            <div class="detail-cell" style="background:#fff7ed; padding:4px 6px; border-radius:4px;">
-              <span class="d-label" style="color:#c2410c;">Re-assessment</span>
-              <span class="d-val" style="color:#9a3412;">${item["Re-assessment"] || '-'}</span>
-            </div>
-          ` : ''}
-          
-          ${isSurgery ? `
-            <div class="detail-cell" style="background:#f0fdf4; padding:4px 6px; border-radius:4px;">
-              <span class="d-label" style="color:#15803d;">Post-op ปรอท / Note</span>
-              <span class="d-val" style="color:#166534;">${item["Pain post-op แรกรับ : ฟอร์มปรอท"] || '-'} / ${item["Pain post-op แรกรับ : Nurse Note"] || '-'}</span>
-            </div>
-            <div class="detail-cell" style="background:#f0fdf4; padding:4px 6px; border-radius:4px;">
-              <span class="d-label" style="color:#15803d;">Guideline Post-op</span>
-              <span class="d-val" style="color:#166534;">${item["Guideline Post-op"] || '-'}</span>
-            </div>
-          ` : ''}
-        </div>
-        
-        ${item["หมายเหตุ"] ? `
-          <div style="margin-top:8px; font-size:0.8rem; color:#475569; background:#fff1f2; padding:6px 10px; border-radius:6px; border-left:3px solid #f43f5e;">
-            <strong style="color:#be123c;"><i class="fa-regular fa-comment-dots"></i> หมายเหตุ:</strong> ${item["หมายเหตุ"]}
-          </div>
-        ` : ''}
-        
-        <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
-          <small style="font-size:0.7rem; color:#94a3b8; font-family:monospace;">${item["Record ID"] || ''}</small>
-          <button class="btn-secondary" style="padding:4px 10px; font-size:0.75rem; border-radius:12px;" onclick="fillFormForAN('${item["AN"]}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
-            <i class="fa-solid fa-clone"></i> ลงข้อมูลต่อจากรอบนี้
-          </button>
-        </div>
-      </div>
-    `;
-  });
-  
-  html += `</div>`;
-  container.innerHTML = html;
-}
-
-/**
- * เติมข้อมูล AN ในฟอร์มเพื่อบันทึกแถวใหม่
- * (ไม่แก้ทับรายการเดิม เพราะ AN เดียวกันอาจมีการประเมินหลายช่วงเวลา)
- */
-window.fillFormForAN = function(an, latestRecord = null) {
-  switchTab("form");
-  
-  elements.inputAN.value = an;
-  if (latestRecord) {
-    if (latestRecord["หน่วยงาน"]) elements.selectWard.value = latestRecord["หน่วยงาน"];
-    if (latestRecord["Tool"]) elements.selectTool.value = latestRecord["Tool"];
-    if (latestRecord["Operation Surgery"]) elements.selectSurgery.value = latestRecord["Operation Surgery"];
-  }
-  
-  // อัปเดตเวลาเป็นเวลาปัจจุบันเสมอ เพื่อพร้อมบันทึกเป็นแถวใหม่
-  initFormDateTime();
-  updatePainConditionUI();
-  updateSurgeryConditionUI();
-  
-  // เลื่อนหน้าจอไปยังส่วนฟอร์ม
-  document.getElementById("panelForm").scrollIntoView({ behavior: "smooth" });
-  
-  showToast(`ระบบเตรียมฟอร์มสำหรับ AN ${an} แล้ว (จะบันทึกเป็นแถวใหม่เสมอ)`, "success");
-};
-
-/**
- * Render KPI Cards ด้านบน
- */
-function renderKPIs() {
-  const total = state.records.length;
-  const painFirstYes = state.records.filter(r => r["Pain แรกรับ : ฟอร์มปรอท"] === "YES" || r["Pain แรกรับ : Nurse note"] === "YES").length;
-  const painQ8Yes = state.records.filter(r => r["Pain q 8 hr : ฟอร์มปรอท"] === "YES").length;
-  const surgeryYes = state.records.filter(r => r["Operation Surgery"] === "YES").length;
-  const guidelineYes = state.records.filter(r => r["Guideline Post-op"] === "YES").length;
-  const painOver5Yes = state.records.filter(r => r["Pain ≥ 5**"] === "YES").length;
-  
-  const elTotal = document.getElementById("kpiTotal");
-  const elPainFirst = document.getElementById("kpiPainFirst");
-  const elPainQ8 = document.getElementById("kpiPainQ8");
-  const elSurgery = document.getElementById("kpiSurgery");
-  const elGuideline = document.getElementById("kpiGuideline");
-  const elPainOver5 = document.getElementById("kpiPainOver5");
-  
-  if (elTotal) elTotal.innerText = total;
-  if (elPainFirst) elPainFirst.innerText = painFirstYes;
-  if (elPainQ8) elPainQ8.innerText = painQ8Yes;
-  if (elSurgery) elSurgery.innerText = surgeryYes;
-  if (elGuideline) elGuideline.innerText = guidelineYes;
-  if (elPainOver5) elPainOver5.innerText = painOver5Yes;
-}
-
-/**
- * Render Dashboard Analytics
- */
-function renderDashboardAnalytics() {
-  const total = state.records.length;
-  if (total === 0) return;
-  
-  // 1. สรุปแยกตามหน่วยงาน (Wards)
-  const wardCounts = {};
-  WARDS.forEach(w => wardCounts[w] = 0);
-  state.records.forEach(r => {
-    if (r["หน่วยงาน"]) {
-      wardCounts[r["หน่วยงาน"]] = (wardCounts[r["หน่วยงาน"]] || 0) + 1;
+    if (result && result.status === "success") {
+      showToast(`เชื่อมต่อสำเร็จ! พบ ${result.sheets ? result.sheets.length : 0} ชีตในไฟล์`, "success");
+    } else {
+      throw new Error(result ? result.message : "ไม่ได้รับข้อมูลที่ถูกต้อง");
     }
-  });
-  
-  const wardContainer = document.getElementById("wardStatsContainer");
-  if (wardContainer) {
-    let wardHtml = "";
-    Object.keys(wardCounts).sort((a,b) => wardCounts[b] - wardCounts[a]).forEach(w => {
-      const cnt = wardCounts[w];
-      const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
-      wardHtml += `
-        <div class="stat-bar-row">
-          <div class="stat-bar-header">
-            <span>หอผู้ป่วย ${w}</span>
-            <span>${cnt} รายการ (${pct}%)</span>
-          </div>
-          <div class="stat-bar-bg">
-            <div class="stat-bar-fill" style="width: ${pct}%; background: #6366f1;"></div>
-          </div>
-        </div>
-      `;
-    });
-    wardContainer.innerHTML = wardHtml;
-  }
-  
-  // 2. สรุปเครื่องมือประเมิน (Tools)
-  const toolCounts = {};
-  TOOLS.forEach(t => toolCounts[t] = 0);
-  state.records.forEach(r => {
-    if (r["Tool"]) {
-      toolCounts[r["Tool"]] = (toolCounts[r["Tool"]] || 0) + 1;
-    }
-  });
-  
-  const toolContainer = document.getElementById("toolStatsContainer");
-  if (toolContainer) {
-    let toolHtml = "";
-    TOOLS.forEach((t, idx) => {
-      const cnt = toolCounts[t] || 0;
-      const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
-      const colors = ["#ec4899", "#8b5cf6", "#0284c7"];
-      toolHtml += `
-        <div class="stat-bar-row">
-          <div class="stat-bar-header">
-            <span>${t}</span>
-            <span>${cnt} รายการ (${pct}%)</span>
-          </div>
-          <div class="stat-bar-bg">
-            <div class="stat-bar-fill" style="width: ${pct}%; background: ${colors[idx % colors.length]};"></div>
-          </div>
-        </div>
-      `;
-    });
-    toolContainer.innerHTML = toolHtml;
+  } catch (err) {
+    showToast(`เชื่อมต่อไม่สำเร็จ: ${err.message}`, "error");
+  } finally {
+    elements.btnTestSync.disabled = false;
+    elements.btnTestSync.innerHTML = origBtnText;
   }
 }
 
-/**
- * Toast Notification Helper
- */
-function showToast(message, type = "success") {
+function showToast(message, type = "info") {
   const container = document.getElementById("toastContainer");
   if (!container) return;
   
   const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
+  toast.className = `toast toast-${type}`;
   
-  let icon = "fa-circle-check";
+  let icon = "fa-circle-info";
+  if (type === "success") icon = "fa-circle-check";
   if (type === "error") icon = "fa-circle-xmark";
   if (type === "warning") icon = "fa-triangle-exclamation";
   
   toast.innerHTML = `
-    <i class="fa-solid ${icon}" style="font-size:1.1rem; color: ${type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#10b981'};"></i>
+    <i class="fa-solid ${icon}"></i>
     <span>${message}</span>
   `;
   
@@ -1194,8 +1472,9 @@ function showToast(message, type = "success") {
   
   setTimeout(() => {
     toast.style.opacity = "0";
-    toast.style.transform = "translateX(50px)";
-    toast.style.transition = "all 0.3s ease";
-    setTimeout(() => toast.remove(), 300);
+    toast.style.transform = "translateY(-10px)";
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 300);
   }, 4000);
 }
