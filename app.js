@@ -227,6 +227,12 @@ function normalizeRecord(item) {
   };
 }
 
+// ========================================================
+// Google Apps Script Web App URL เริ่มต้น
+// (หากใส่ URL ไว้ที่นี่ พยาบาลและทุกคนที่เปิดเว็บจะเชื่อมต่อชีตให้อัตโนมัติทันที ไม่ต้องตั้งค่าในมือถือแต่ละเครื่อง)
+// ========================================================
+const DEFAULT_SCRIPT_URL = "";
+
 // App State
 let state = {
   records: [],
@@ -235,7 +241,7 @@ let state = {
   activeFilter: "all", // "all" | "severe" | "surgery" | "incomplete"
   viewMode: "cards",   // "cards" | "table"
   activeSearchHN: "",
-  googleScriptUrl: localStorage.getItem("painApp_scriptUrl") || "",
+  googleScriptUrl: localStorage.getItem("painApp_scriptUrl") || DEFAULT_SCRIPT_URL,
   currentTab: "form",  // "form" | "history" | "dashboard"
   isOnlineSyncing: false
 };
