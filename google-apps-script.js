@@ -113,20 +113,52 @@ function setupSearchSheet(sheet) {
   sheet.getRange("A6").setFormula(formula);
 }
 
+// คำสำคัญที่บ่งบอกว่าเป็นชีตประจำเดือน
+const MONTH_KEYWORDS = [
+  "ม.ค", "ก.พ", "มี.ค", "เม.ย", "พ.ค", "มิ.ย", "ก.ค", "ส.ค", "ก.ย", "ต.ค", "พ.ย", "ธ.ค",
+  "มกรา", "กุมภา", "มีนา", "เมษา", "พฤษภา", "มิถุนา", "กรกฎา", "สิงหา", "กันยา", "ตุลา", "พฤศจิกา", "ธันวา",
+  "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"
+];
+
+function isMonthYearSheet(sheetName) {
+  if (!sheetName) return false;
+  const name = String(sheetName).trim();
+  const lower = name.toLowerCase();
+  
+  // ยกเว้นชีตระบบและชีตที่ไม่ใช่รายเดือน
+  if (name === SHEET_NAME_SEARCH || name === SHEET_NAME_DATA) return false;
+  if (/^(sheet\d+|ชีต\d+|setting|config|template|summary|สรุป|ค้นหา|dashboard)/i.test(name)) return false;
+  
+  // ตรวจสอบว่ามีชื่อเดือน
+  const hasMonth = MONTH_KEYWORDS.some(kw => lower.includes(kw));
+  // หรือมีรูปแบบตัวเลข ปี/เดือน เช่น 2567-10, 10/2567, 2024-10, 67_10
+  const hasDatePattern = /\b(25\d{2}|20\d{2}|\d{2})[-_\/.]\d{1,2}\b|\b\d{1,2}[-_\/.](25\d{2}|20\d{2}|\d{2})\b/.test(name);
+  
+  return hasMonth || hasDatePattern;
+}
+
 /**
- * ดึงรายชื่อ Worksheet ทั้งหมดในสเปรดชีต (ยกเว้นชีต ค้นหา_AN)
+ * ดึงรายชื่อ Worksheet เฉพาะที่เป็น "เดือน ปี" เท่านั้น
  */
 function getSheetNames(ss) {
   const sheets = ss.getSheets();
-  return sheets
-    .map(s => s.getName())
-    .filter(name => name !== SHEET_NAME_SEARCH);
+  const allNames = sheets.map(s => s.getName().trim());
+  
+  // 1. กรองเฉพาะชีตที่ตรงกับ เดือน ปี เท่านั้น
+  const monthSheets = allNames.filter(name => isMonthYearSheet(name));
+  
+  if (monthSheets.length > 0) {
+    return monthSheets;
+  }
+  
+  // หากยังไม่มีชีตเดือน ให้ส่งชีตข้อมูลที่ใช้งานได้
+  return allNames.filter(name => name !== SHEET_NAME_SEARCH);
 }
 
 /**
  * Handle GET Requests (สำหรับดึงข้อมูล)
- * ?action=getSheets -> ดึงรายชื่อ Work Sheet รายเดือนทั้งหมด
- * ?action=getData&sheet=XXXX -> ดึงข้อมูลจากชีตที่เลือก (ถ้าไม่ระบุจะดึงชีตแรก หรือ Pain_Data)
+ * ?action=getSheets -> ดึงรายชื่อ Work Sheet รายเดือนเท่านั้น
+ * ?action=getData&sheet=XXXX -> ดึงข้อมูลจากชีตเดือนที่เลือก
  * ?action=search&an=XXXX -> ดึงข้อมูลเฉพาะ AN นั้น
  */
 function doGet(e) {
@@ -137,25 +169,29 @@ function doGet(e) {
     const callback = e.parameter && e.parameter.callback;
     const targetSheetName = (e.parameter && e.parameter.sheet) || "";
     const ss = getSpreadsheet();
+    const sheetList = getSheetNames(ss);
     
-    // 1. ดึงรายชื่อแท็บชีตทั้งหมด (รายเดือน)
+    // 1. ดึงรายชื่อแท็บชีตเดือน-ปี
     if (action === "getSheets") {
-      const sheetList = getSheetNames(ss);
       return createJsonResponse({ status: "success", sheets: sheetList }, callback);
     }
     
-    // 2. ดึงข้อมูล
+    // 2. ดึงข้อมูลตามชีตที่เลือก
     if (action === "getData") {
       let sheet = null;
       if (targetSheetName) {
         sheet = ss.getSheetByName(targetSheetName);
+      }
+      
+      // ถ้าไม่ได้ระบุ ให้เลือกชีตแรกในรายการเดือน หรือ Pain_Data
+      if (!sheet && sheetList.length > 0) {
+        sheet = ss.getSheetByName(sheetList[0]);
       }
       if (!sheet) {
         sheet = ss.getSheetByName(SHEET_NAME_DATA) || ss.getSheets()[0];
       }
       
       const data = getAllData(sheet);
-      const sheetList = getSheetNames(ss);
       return createJsonResponse({ 
         status: "success", 
         currentSheet: sheet.getName(),

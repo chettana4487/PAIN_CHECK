@@ -607,31 +607,72 @@ function fetchJsonp(url, params = {}) {
   });
 }
 
+// คำสำคัญที่บ่งบอกว่าเป็นชีตประจำเดือน
+const MONTH_KEYWORDS = [
+  "ม.ค", "ก.พ", "มี.ค", "เม.ย", "พ.ค", "มิ.ย", "ก.ค", "ส.ค", "ก.ย", "ต.ค", "พ.ย", "ธ.ค",
+  "มกรา", "กุมภา", "มีนา", "เมษา", "พฤษภา", "มิถุนา", "กรกฎา", "สิงหา", "กันยา", "ตุลา", "พฤศจิกา", "ธันวา",
+  "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"
+];
+
+function isMonthYearSheetName(name) {
+  if (!name) return false;
+  const str = String(name).trim();
+  const lower = str.toLowerCase();
+  
+  // ตัดชีตระบบและชีตที่ไม่ใช่เดือนทิ้ง
+  if (lower === "pain_data" || lower === "ค้นหา_an" || lower.startsWith("sheet") || lower.startsWith("ชีต")) return false;
+  if (/^(setting|config|template|summary|สรุป|dashboard|temp)/i.test(str)) return false;
+  
+  const hasMonth = MONTH_KEYWORDS.some(kw => lower.includes(kw));
+  const hasDatePattern = /\b(25\d{2}|20\d{2}|\d{2})[-_\/.]\d{1,2}\b|\b\d{1,2}[-_\/.](25\d{2}|20\d{2}|\d{2})\b/.test(str);
+  
+  return hasMonth || hasDatePattern;
+}
+
 /**
- * จัดการรายชื่อ Work Sheet / แท็บประจำเดือน
+ * จัดการรายชื่อ Work Sheet / แท็บประจำเดือน (แสดงเฉพาะ เดือน ปี เท่านั้น)
  */
 function populateSheetDropdowns(sheets, activeSheet = "") {
-  if (!Array.isArray(sheets) || sheets.length === 0) {
-    sheets = ["Pain_Data", "ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567"];
+  let filteredSheets = [];
+  
+  if (Array.isArray(sheets)) {
+    // 1. กรองเฉพาะชีตที่เป็น "เดือน ปี" เท่านั้น
+    filteredSheets = sheets.filter(s => isMonthYearSheetName(s));
   }
-  state.sheets = sheets;
-  if (!activeSheet) activeSheet = sheets[0];
+  
+  // ถ้าในชีตยังไม่มีชีตเดือนเลย ให้แสดงรายการเดือนภาษาไทยเริ่มต้น
+  if (filteredSheets.length === 0) {
+    filteredSheets = ["ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567", "กรกฎาคม 2567"];
+  }
+  
+  state.sheets = filteredSheets;
+  
+  // เลือกว่าจะ active ชีตไหน
+  if (!activeSheet || !filteredSheets.includes(activeSheet)) {
+    activeSheet = filteredSheets[0];
+  }
   state.currentSheet = activeSheet;
   
-  const optionsHtml = sheets.map(s => `<option value="${s}" ${s === activeSheet ? 'selected' : ''}>📄 ${s}</option>`).join("");
+  const optionsHtml = filteredSheets.map(s => `
+    <option value="${s}" ${s === activeSheet ? 'selected' : ''}>
+      📅 ${s}
+    </option>
+  `).join("");
   
   if (elements.selectSheetMonth) {
     elements.selectSheetMonth.innerHTML = optionsHtml;
+    elements.selectSheetMonth.value = activeSheet;
   }
   if (elements.formTargetSheet) {
     elements.formTargetSheet.innerHTML = optionsHtml;
+    elements.formTargetSheet.value = activeSheet;
   }
 }
 
 async function fetchSheetList(forceRefresh = false) {
   if (!state.googleScriptUrl) {
-    // โหมดออฟไลน์: ใส่รายชื่อชีตตัวอย่าง
-    populateSheetDropdowns(["Pain_Data", "ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567"]);
+    // โหมดออฟไลน์: ใส่รายชื่อเดือนเริ่มต้น
+    populateSheetDropdowns(["ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567", "กรกฎาคม 2567"]);
     return;
   }
   
@@ -647,12 +688,11 @@ async function fetchSheetList(forceRefresh = false) {
     if (result && result.status === "success" && Array.isArray(result.sheets)) {
       populateSheetDropdowns(result.sheets, state.currentSheet);
       if (forceRefresh) {
-        showToast(`อัปเดตรายชื่อชีตเรียบร้อย (พบ ${result.sheets.length} แท็บ)`, "success");
+        showToast(`อัปเดตรายชื่อเดือนเรียบร้อย (พบ ${state.sheets.length} เดือน)`, "success");
       }
     }
   } catch (err) {
     console.warn("Could not fetch sheet list:", err);
-    populateSheetDropdowns(["Pain_Data"]);
   }
 }
 
@@ -660,9 +700,34 @@ async function fetchSheetList(forceRefresh = false) {
  * ดึงข้อมูลทั้งหมดจาก Google Sheet ตาม Work Sheet ที่เลือก (ลองทั้ง Fetch และ JSONP)
  */
 async function fetchFromGoogleSheet(targetSheet = "") {
-  if (!state.googleScriptUrl) return;
-  
   const sheetToFetch = targetSheet || state.currentSheet || "";
+  
+  if (!state.googleScriptUrl) {
+    // โหมดออฟไลน์ / ทดสอบ: กรองหรือจำลองข้อมูลตามเดือนที่เลือก
+    state.currentSheet = sheetToFetch;
+    
+    // จำลองชุดข้อมูลตามเดือนที่เลือกเพื่อให้เห็นการเปลี่ยนแปลงชัดเจน
+    if (sheetToFetch.includes("กันยา")) {
+      state.records = INITIAL_DEMO_RECORDS.slice(1, 3);
+    } else if (sheetToFetch.includes("สิงหา")) {
+      state.records = INITIAL_DEMO_RECORDS.slice(2, 4);
+    } else if (sheetToFetch.includes("กรกฎา")) {
+      state.records = INITIAL_DEMO_RECORDS.slice(3, 5);
+    } else {
+      state.records = INITIAL_DEMO_RECORDS;
+    }
+    
+    saveRecordsToLocal();
+    renderKPIs();
+    if (state.currentTab === "dashboard") {
+      renderDashboardAnalytics();
+    } else if (state.currentTab === "history") {
+      performSearchAN(elements.searchANInput.value.trim());
+    }
+    showToast(`อัปเดตข้อมูลเดือน ${sheetToFetch} แล้ว (พบ ${state.records.length} รายการ)`, "success");
+    return;
+  }
+  
   state.isOnlineSyncing = true;
   updateSyncStatusBadge();
   
@@ -692,19 +757,20 @@ async function fetchFromGoogleSheet(targetSheet = "") {
         saveRecordsToLocal();
         renderKPIs();
         
-        // อัปเดตหน้าปัจจุบัน
+        // อัปเดตหน้าปัจจุบันตามข้อมูลเดือนใหม่ทันที
         if (state.currentTab === "dashboard") {
           renderDashboardAnalytics();
         } else if (state.currentTab === "history") {
           performSearchAN(elements.searchANInput.value.trim());
         }
         
-        const sheetLabel = result.currentSheet ? `ชีต ${result.currentSheet}` : "Google Sheet";
-        showToast(`โหลดข้อมูลจาก ${sheetLabel} เรียบร้อย (${result.data.length} รายการ)`, "success");
+        const sheetLabel = result.currentSheet || sheetToFetch;
+        showToast(`อัปเดตข้อมูลเดือน ${sheetLabel} สำเร็จ! (${result.data.length} รายการ)`, "success");
       }
     }
   } catch (e) {
     console.log("Could not fetch remote sheet data:", e);
+    showToast(`ไม่สามารถดึงข้อมูลเดือน ${sheetToFetch}: ${e.message}`, "warning");
   } finally {
     state.isOnlineSyncing = false;
     updateSyncStatusBadge();
