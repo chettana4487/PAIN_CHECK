@@ -114,8 +114,19 @@ function setupSearchSheet(sheet) {
 }
 
 /**
+ * ดึงรายชื่อ Worksheet ทั้งหมดในสเปรดชีต (ยกเว้นชีต ค้นหา_AN)
+ */
+function getSheetNames(ss) {
+  const sheets = ss.getSheets();
+  return sheets
+    .map(s => s.getName())
+    .filter(name => name !== SHEET_NAME_SEARCH);
+}
+
+/**
  * Handle GET Requests (สำหรับดึงข้อมูล)
- * ?action=getData -> ดึงข้อมูลทั้งหมด
+ * ?action=getSheets -> ดึงรายชื่อ Work Sheet รายเดือนทั้งหมด
+ * ?action=getData&sheet=XXXX -> ดึงข้อมูลจากชีตที่เลือก (ถ้าไม่ระบุจะดึงชีตแรก หรือ Pain_Data)
  * ?action=search&an=XXXX -> ดึงข้อมูลเฉพาะ AN นั้น
  */
 function doGet(e) {
@@ -124,19 +135,42 @@ function doGet(e) {
     e = e || { parameter: {} };
     const action = (e.parameter && e.parameter.action) || "getData";
     const callback = e.parameter && e.parameter.callback;
+    const targetSheetName = (e.parameter && e.parameter.sheet) || "";
     const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_NAME_DATA);
     
-    if (action === "getData") {
-      const data = getAllData(sheet);
-      return createJsonResponse({ status: "success", data: data }, callback);
+    // 1. ดึงรายชื่อแท็บชีตทั้งหมด (รายเดือน)
+    if (action === "getSheets") {
+      const sheetList = getSheetNames(ss);
+      return createJsonResponse({ status: "success", sheets: sheetList }, callback);
     }
     
+    // 2. ดึงข้อมูล
+    if (action === "getData") {
+      let sheet = null;
+      if (targetSheetName) {
+        sheet = ss.getSheetByName(targetSheetName);
+      }
+      if (!sheet) {
+        sheet = ss.getSheetByName(SHEET_NAME_DATA) || ss.getSheets()[0];
+      }
+      
+      const data = getAllData(sheet);
+      const sheetList = getSheetNames(ss);
+      return createJsonResponse({ 
+        status: "success", 
+        currentSheet: sheet.getName(),
+        sheets: sheetList,
+        count: data.length,
+        data: data 
+      }, callback);
+    }
+    
+    // 3. ค้นหาประวัติ AN (ค้นหาข้ามทุกชีต หรือค้นหาชีตที่เลือก)
     if (action === "search") {
       const anQuery = ((e.parameter && e.parameter.an) || "").trim();
+      let sheet = targetSheetName ? ss.getSheetByName(targetSheetName) : (ss.getSheetByName(SHEET_NAME_DATA) || ss.getSheets()[0]);
       const allData = getAllData(sheet);
       const filtered = allData.filter(item => String(item["AN"] || "").trim().toLowerCase() === anQuery.toLowerCase());
-      // เรียงจากล่าสุดไปเก่าสุด
       filtered.sort((a, b) => new Date(b["วันที่และเวลา"]) - new Date(a["วันที่และเวลา"]));
       return createJsonResponse({ status: "success", an: anQuery, count: filtered.length, data: filtered }, callback);
     }
@@ -154,13 +188,19 @@ function doPost(e) {
   try {
     setupSheets();
     const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_NAME_DATA);
     
     let body = {};
     if (e.postData && e.postData.contents) {
       body = JSON.parse(e.postData.contents);
     } else {
       body = e.parameter;
+    }
+    
+    // เลือกว่าจะบันทึกลงชีตไหน (ถ้าส่ง sheetName มา หรือใช้ Pain_Data)
+    const targetSheetName = body.sheetName || body["sheetName"] || "";
+    let sheet = targetSheetName ? ss.getSheetByName(targetSheetName) : null;
+    if (!sheet) {
+      sheet = ss.getSheetByName(SHEET_NAME_DATA) || ss.getSheets()[0];
     }
     
     // สร้าง Record ID หากยังไม่มี

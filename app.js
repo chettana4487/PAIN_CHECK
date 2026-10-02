@@ -124,6 +124,8 @@ const INITIAL_DEMO_RECORDS = [
 // App State
 let state = {
   records: [],
+  sheets: ["Pain_Data"],
+  currentSheet: "Pain_Data",
   googleScriptUrl: localStorage.getItem("painApp_scriptUrl") || "",
   currentTab: "form", // "form" | "history" | "dashboard"
   activeSearchAN: "",
@@ -145,6 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
   updatePainConditionUI();
   updateSurgeryConditionUI();
   updateSyncStatusBadge();
+  fetchSheetList();
 });
 
 function initDOMElements() {
@@ -159,6 +162,11 @@ function initDOMElements() {
     history: document.getElementById("panelHistory"),
     dashboard: document.getElementById("panelDashboard")
   };
+  
+  // Monthly Sheet Selectors
+  elements.selectSheetMonth = document.getElementById("selectSheetMonth");
+  elements.btnRefreshSheets = document.getElementById("btnRefreshSheets");
+  elements.formTargetSheet = document.getElementById("formTargetSheet");
   
   // Search
   elements.searchANInput = document.getElementById("searchANInput");
@@ -274,6 +282,26 @@ function bindEvents() {
       updateSurgeryConditionUI();
     }, 50);
   });
+  
+  // Monthly Worksheet Change
+  if (elements.selectSheetMonth) {
+    elements.selectSheetMonth.addEventListener("change", (e) => {
+      const selected = e.target.value;
+      if (selected) {
+        state.currentSheet = selected;
+        fetchFromGoogleSheet(selected);
+        if (elements.formTargetSheet) {
+          elements.formTargetSheet.value = selected;
+        }
+      }
+    });
+  }
+
+  if (elements.btnRefreshSheets) {
+    elements.btnRefreshSheets.addEventListener("click", () => {
+      fetchSheetList(true);
+    });
+  }
   
   // Search actions
   elements.btnSearchAN.addEventListener("click", () => {
@@ -475,7 +503,8 @@ async function handleFormSubmit(e) {
     "Pain post-op แรกรับ : ฟอร์มปรอท": painPostOpThermo,
     "Pain post-op แรกรับ : Nurse Note": painPostOpNote,
     "Guideline Post-op": guidelinePostOp,
-    "หมายเหตุ": note
+    "หมายเหตุ": note,
+    "sheetName": elements.formTargetSheet ? elements.formTargetSheet.value : (state.currentSheet || "Pain_Data")
   };
   
   // 1. จำชื่อผู้บันทึก
@@ -579,33 +608,99 @@ function fetchJsonp(url, params = {}) {
 }
 
 /**
- * ดึงข้อมูลทั้งหมดจาก Google Sheet (ลองทั้ง Fetch และ JSONP)
+ * จัดการรายชื่อ Work Sheet / แท็บประจำเดือน
  */
-async function fetchFromGoogleSheet() {
+function populateSheetDropdowns(sheets, activeSheet = "") {
+  if (!Array.isArray(sheets) || sheets.length === 0) {
+    sheets = ["Pain_Data", "ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567"];
+  }
+  state.sheets = sheets;
+  if (!activeSheet) activeSheet = sheets[0];
+  state.currentSheet = activeSheet;
+  
+  const optionsHtml = sheets.map(s => `<option value="${s}" ${s === activeSheet ? 'selected' : ''}>📄 ${s}</option>`).join("");
+  
+  if (elements.selectSheetMonth) {
+    elements.selectSheetMonth.innerHTML = optionsHtml;
+  }
+  if (elements.formTargetSheet) {
+    elements.formTargetSheet.innerHTML = optionsHtml;
+  }
+}
+
+async function fetchSheetList(forceRefresh = false) {
+  if (!state.googleScriptUrl) {
+    // โหมดออฟไลน์: ใส่รายชื่อชีตตัวอย่าง
+    populateSheetDropdowns(["Pain_Data", "ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567"]);
+    return;
+  }
+  
+  try {
+    let result = null;
+    try {
+      const res = await fetch(`${state.googleScriptUrl}?action=getSheets&_t=${Date.now()}`);
+      result = await res.json();
+    } catch (e) {
+      result = await fetchJsonp(state.googleScriptUrl, { action: "getSheets" });
+    }
+    
+    if (result && result.status === "success" && Array.isArray(result.sheets)) {
+      populateSheetDropdowns(result.sheets, state.currentSheet);
+      if (forceRefresh) {
+        showToast(`อัปเดตรายชื่อชีตเรียบร้อย (พบ ${result.sheets.length} แท็บ)`, "success");
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch sheet list:", err);
+    populateSheetDropdowns(["Pain_Data"]);
+  }
+}
+
+/**
+ * ดึงข้อมูลทั้งหมดจาก Google Sheet ตาม Work Sheet ที่เลือก (ลองทั้ง Fetch และ JSONP)
+ */
+async function fetchFromGoogleSheet(targetSheet = "") {
   if (!state.googleScriptUrl) return;
   
+  const sheetToFetch = targetSheet || state.currentSheet || "";
   state.isOnlineSyncing = true;
   updateSyncStatusBadge();
   
   try {
     let result = null;
+    const params = { action: "getData" };
+    if (sheetToFetch) params.sheet = sheetToFetch;
     
     // ลองด้วย Fetch ปกติก่อน
     try {
-      const fetchUrl = `${state.googleScriptUrl}?action=getData&_t=${Date.now()}`;
+      const queryStr = new URLSearchParams({ ...params, _t: Date.now() }).toString();
+      const fetchUrl = `${state.googleScriptUrl}?${queryStr}`;
       const response = await fetch(fetchUrl);
       result = await response.json();
     } catch (fetchErr) {
       // ถ้า fetch ติด CORS ให้ fallback ไปใช้ JSONP
-      result = await fetchJsonp(state.googleScriptUrl, { action: "getData" });
+      result = await fetchJsonp(state.googleScriptUrl, params);
     }
     
-    if (result && result.status === "success" && Array.isArray(result.data)) {
-      if (result.data.length > 0) {
+    if (result && result.status === "success") {
+      if (Array.isArray(result.sheets) && result.sheets.length > 0) {
+        populateSheetDropdowns(result.sheets, result.currentSheet || sheetToFetch);
+      }
+      
+      if (Array.isArray(result.data)) {
         state.records = result.data;
         saveRecordsToLocal();
         renderKPIs();
-        showToast(`อัปเดตข้อมูลจาก Google Sheet เรียบร้อย (${result.data.length} รายการ)`, "success");
+        
+        // อัปเดตหน้าปัจจุบัน
+        if (state.currentTab === "dashboard") {
+          renderDashboardAnalytics();
+        } else if (state.currentTab === "history") {
+          performSearchAN(elements.searchANInput.value.trim());
+        }
+        
+        const sheetLabel = result.currentSheet ? `ชีต ${result.currentSheet}` : "Google Sheet";
+        showToast(`โหลดข้อมูลจาก ${sheetLabel} เรียบร้อย (${result.data.length} รายการ)`, "success");
       }
     }
   } catch (e) {
