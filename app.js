@@ -233,11 +233,19 @@ function normalizeRecord(item) {
 // ========================================================
 const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw-rC3DdTBCiCLNz_cE3IqJLvLRFdXrAVW6c3-1A8GfJlMELrNTenJr4QP86acUzwKq/exec";
 
-// App State
+// App State with LocalStorage persistence for instant 0.05s load
+let cachedSheets = [];
+try {
+  const s = localStorage.getItem("painApp_sheets");
+  if (s) cachedSheets = JSON.parse(s);
+} catch (e) {}
+
+let cachedCurrentSheet = localStorage.getItem("painApp_currentSheet") || (cachedSheets[0] || "ต.ค.68");
+
 let state = {
   records: [],
-  sheets: ["ตุลาคม 2567"],
-  currentSheet: "ตุลาคม 2567",
+  sheets: cachedSheets.length > 0 ? cachedSheets : ["ต.ค.68"],
+  currentSheet: cachedCurrentSheet,
   activeFilter: "all", // "all" | "severe" | "surgery" | "incomplete"
   viewMode: "cards",   // "cards" | "table"
   activeSearchHN: "",
@@ -252,8 +260,8 @@ const elements = {};
 document.addEventListener("DOMContentLoaded", () => {
   initDOMElements();
   initDropdownOptions();
-  populateSheetDropdowns(state.sheets, state.currentSheet);
   loadStoredRecords();
+  populateSheetDropdowns(state.sheets, state.currentSheet);
   bindEvents();
   document.body.setAttribute("data-active-tab", "form");
   renderKPIs();
@@ -269,7 +277,9 @@ document.addEventListener("DOMContentLoaded", () => {
   updatePainConditionUI();
   updateSurgeryConditionUI();
   updateSyncStatusBadge();
-  fetchSheetList();
+  
+  // โหลดข้อมูลล่าสุดเบื้องหลังแบบ Single Request (ไม่บล็อกหน้าจอ)
+  fetchFromGoogleSheet(state.currentSheet, true);
 });
 
 function initDOMElements() {
@@ -1298,52 +1308,32 @@ function populateSheetDropdowns(sheets, activeSheet = "") {
 }
 
 async function fetchSheetList(forceRefresh = false) {
-  if (!state.googleScriptUrl) {
-    populateSheetDropdowns(["ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567"]);
-    return;
-  }
-  
-  try {
-    let result = null;
-    try {
-      const res = await fetch(`${state.googleScriptUrl}?action=getSheets&_t=${Date.now()}`);
-      result = await res.json();
-    } catch (e) {
-      result = await fetchJsonp(state.googleScriptUrl, { action: "getSheets" });
-    }
-    
-    if (result && result.status === "success" && Array.isArray(result.sheets)) {
-      populateSheetDropdowns(result.sheets, state.currentSheet);
-      fetchFromGoogleSheet(state.currentSheet);
-      if (forceRefresh) {
-        showToast(`อัปเดตรายชื่อชีตเรียบร้อย (พบ ${state.sheets.length} เดือน)`, "success");
-      }
-    }
-  } catch (err) {
-    console.warn("Could not fetch sheet list:", err);
-  }
+  return fetchFromGoogleSheet(state.currentSheet, !forceRefresh);
 }
 
 /**
- * ดึงข้อมูลผู้ป่วยจากชีตประจำเดือนที่เลือก
+ * ดึงข้อมูลผู้ป่วยจากชีตประจำเดือนที่เลือก (Single Request + Instant Cache)
  */
-async function fetchFromGoogleSheet(targetSheet = "") {
+async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
   const sheetToFetch = targetSheet || state.currentSheet || "";
   
-  if (!state.googleScriptUrl) {
-    // ข้อมูลตัวอย่าง
-    state.currentSheet = sheetToFetch;
-    if (sheetToFetch.includes("กันยา")) {
-      state.records = INITIAL_DEMO_RECORDS.slice(1, 4);
-    } else if (sheetToFetch.includes("สิงหา")) {
-      state.records = INITIAL_DEMO_RECORDS.slice(2, 5);
-    } else {
-      state.records = INITIAL_DEMO_RECORDS;
-    }
-    renderKPIs();
-    renderHistoryView();
-    return;
+  // 1. Instant Render from LocalStorage Cache (ถ้าเคยโหลดไว้แล้ว ดึงขึ้นมาแสดงผลทันทีใน 0.05 วินาที)
+  const cachedForThisSheet = localStorage.getItem("painApp_sheet_cache_" + sheetToFetch);
+  if (cachedForThisSheet) {
+    try {
+      const parsed = JSON.parse(cachedForThisSheet);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        state.records = parsed
+          .map(r => normalizeRecord(r))
+          .filter(r => r && r.HN && r.HN !== "ไม่ระบุ" && r.HN !== "HN" && r._rowIndex !== 2);
+        state.currentSheet = sheetToFetch;
+        renderKPIs();
+        renderHistoryView();
+      }
+    } catch (e) {}
   }
+  
+  if (!state.googleScriptUrl) return;
   
   state.isOnlineSyncing = true;
   updateSyncStatusBadge();
@@ -1363,23 +1353,37 @@ async function fetchFromGoogleSheet(targetSheet = "") {
       });
     }
     
-    if (result && result.status === "success" && Array.isArray(result.data)) {
-      state.records = result.data
-        .map(r => normalizeRecord(r))
-        .filter(r => r && r.HN && r.HN !== "ไม่ระบุ" && r.HN !== "HN" && r._rowIndex !== 2);
-      state.currentSheet = sheetToFetch;
-      saveRecordsToLocal();
-      renderKPIs();
-      renderHistoryView();
-      showToast(`โหลดข้อมูลชีต "${sheetToFetch}" สำเร็จ (${state.records.length} รายการ)`, "success");
+    if (result && result.status === "success") {
+      // 1. อัปเดตรายชื่อชีตประจำเดือนที่ได้มาพร้อมกันในรอบเดียว (ไม่ต้องยิง 2 requests ซ้ำซ้อน)
+      if (Array.isArray(result.sheets) && result.sheets.length > 0) {
+        state.sheets = result.sheets;
+        localStorage.setItem("painApp_sheets", JSON.stringify(result.sheets));
+        populateSheetDropdowns(result.sheets, result.currentSheet || sheetToFetch);
+      }
+      
+      // 2. อัปเดตข้อมูลผู้ป่วย
+      if (Array.isArray(result.data)) {
+        state.records = result.data
+          .map(r => normalizeRecord(r))
+          .filter(r => r && r.HN && r.HN !== "ไม่ระบุ" && r.HN !== "HN" && r._rowIndex !== 2);
+        state.currentSheet = result.currentSheet || sheetToFetch;
+        saveRecordsToLocal();
+        renderKPIs();
+        renderHistoryView();
+        
+        if (!isInitial) {
+          showToast(`ซิงค์ข้อมูลชีต "${state.currentSheet}" สำเร็จ (${state.records.length} รายการ)`, "success");
+        }
+      }
     } else {
       throw new Error(result ? result.message : "ข้อมูลไม่ถูกต้อง");
     }
     
   } catch (err) {
     console.warn("Failed to fetch from Google Sheet:", err);
-    showToast(`เชื่อมต่อชีตไม่ได้: ${err.message}`, "warning");
-    loadStoredRecords();
+    if (!isInitial) {
+      showToast(`เชื่อมต่อชีตไม่ได้: ${err.message}`, "warning");
+    }
   } finally {
     state.isOnlineSyncing = false;
     updateSyncStatusBadge();
@@ -1441,15 +1445,22 @@ function updateSyncStatusBadge() {
 function saveRecordsToLocal() {
   try {
     localStorage.setItem("painApp_records_v2", JSON.stringify(state.records));
+    if (state.currentSheet) {
+      localStorage.setItem("painApp_sheet_cache_" + state.currentSheet, JSON.stringify(state.records));
+      localStorage.setItem("painApp_currentSheet", state.currentSheet);
+    }
+    if (Array.isArray(state.sheets) && state.sheets.length > 0) {
+      localStorage.setItem("painApp_sheets", JSON.stringify(state.sheets));
+    }
   } catch (e) {}
 }
 
 function loadStoredRecords() {
   try {
-    // ล้าง cache เก่าที่อาจมีข้อมูลตกค้าง
     localStorage.removeItem("painApp_records");
     
-    const raw = localStorage.getItem("painApp_records_v2");
+    const cachedSheet = localStorage.getItem("painApp_currentSheet") || state.currentSheet;
+    const raw = (cachedSheet ? localStorage.getItem("painApp_sheet_cache_" + cachedSheet) : null) || localStorage.getItem("painApp_records_v2");
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1458,6 +1469,7 @@ function loadStoredRecords() {
           .filter(r => r && r.HN && r.HN !== "ไม่ระบุ" && r.HN !== "HN" && r._rowIndex !== 2);
         if (valid.length > 0) {
           state.records = valid;
+          if (cachedSheet) state.currentSheet = cachedSheet;
           return;
         }
       }

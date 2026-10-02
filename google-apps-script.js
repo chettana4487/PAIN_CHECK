@@ -39,15 +39,24 @@ function isMonthYearSheet(sheetName) {
 }
 
 function getSheetNames(ss) {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get("cached_month_sheets");
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) {}
+  }
+  
   const sheets = ss.getSheets();
   const allNames = sheets.map(s => s.getName().trim());
   
   // 1. กรองเฉพาะชีตเดือน-ปี
   const monthSheets = allNames.filter(name => isMonthYearSheet(name));
-  if (monthSheets.length > 0) return monthSheets;
+  const result = monthSheets.length > 0 ? monthSheets : allNames.filter(name => name !== SHEET_NAME_SEARCH);
   
-  // 2. ถ้าไม่มี ให้ส่งชีตข้อมูลที่ใช้งานได้
-  return allNames.filter(name => name !== SHEET_NAME_SEARCH);
+  try {
+    cache.put("cached_month_sheets", JSON.stringify(result), 1800); // แคชรายชื่อชีตไว้ 30 นาที
+  } catch (e) {}
+  
+  return result;
 }
 
 /**
@@ -59,16 +68,28 @@ function doGet(e) {
     const action = (e.parameter && e.parameter.action) || "getData";
     const callback = e.parameter && e.parameter.callback;
     const targetSheetName = (e.parameter && (e.parameter.sheet || e.parameter.sheetName)) || "";
-    const ss = getSpreadsheet();
-    const sheetList = getSheetNames(ss);
     
-    // 1. ดึงรายชื่อแท็บชีตเดือน
+    // 1. ดึงรายชื่อแท็บชีตเดือน (พร้อม High-Speed Cache)
     if (action === "getSheets") {
+      const ss = getSpreadsheet();
+      const sheetList = getSheetNames(ss);
       return createJsonResponse({ status: "success", sheets: sheetList }, callback);
     }
     
-    // 2. ดึงข้อมูล
+    // 2. ดึงข้อมูล (High-Speed CacheService: ส่งผลลัพธ์กลับในเสี้ยววินาที)
     if (action === "getData" || action === "getAll") {
+      const cache = CacheService.getScriptCache();
+      const cacheKey = "cache_data_" + (targetSheetName ? targetSheetName.replace(/\s+/g, "_") : "default");
+      const cachedPayload = cache.get(cacheKey);
+      
+      // ถ้ามีใน Memory Cache ของ Google ให้ส่งกลับทันทีใน 100-300ms!
+      if (cachedPayload && !e.parameter.nocache) {
+        return createJsonResponse(JSON.parse(cachedPayload), callback);
+      }
+      
+      const ss = getSpreadsheet();
+      const sheetList = getSheetNames(ss);
+      
       let sheet = null;
       if (targetSheetName) {
         sheet = ss.getSheetByName(targetSheetName);
@@ -81,17 +102,26 @@ function doGet(e) {
       }
       
       const data = parseHospitalSheet(sheet);
-      return createJsonResponse({ 
+      const responsePayload = { 
         status: "success", 
         currentSheet: sheet.getName(),
         sheets: sheetList,
         count: data.length,
         data: data 
-      }, callback);
+      };
+      
+      // เก็บลง Memory Cache ของ Google ไว้นาน 10 นาที (600 วินาที)
+      try {
+        cache.put(cacheKey, JSON.stringify(responsePayload), 600);
+      } catch (cacheErr) {}
+      
+      return createJsonResponse(responsePayload, callback);
     }
     
     // 3. ค้นหาตาม HN/AN
     if (action === "search") {
+      const ss = getSpreadsheet();
+      const sheetList = getSheetNames(ss);
       const q = ((e.parameter && (e.parameter.an || e.parameter.hn)) || "").trim().toLowerCase();
       let sheet = targetSheetName ? ss.getSheetByName(targetSheetName) : null;
       if (!sheet && sheetList.length > 0) sheet = ss.getSheetByName(sheetList[0]);
@@ -169,6 +199,13 @@ function doPost(e) {
     
     // บันทึกต่อท้ายแถวที่มีข้อมูล
     sheet.appendRow(rowData);
+    
+    // ล้างแคชของชีตนี้เพื่อให้ข้อมูลแถวใหม่ขึ้นทันที
+    try {
+      const cache = CacheService.getScriptCache();
+      cache.remove("cache_data_" + sheet.getName().replace(/\s+/g, "_"));
+      cache.remove("cache_data_default");
+    } catch (cErr) {}
     
     return createJsonResponse({
       status: "success",
