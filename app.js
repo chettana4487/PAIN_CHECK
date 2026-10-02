@@ -865,87 +865,171 @@ function renderCardView(list, container) {
     const toolDisplay = item["Tool"] || "Numeric Rating Score";
     const rowNum = idx + 1;
     
+    const initThermo = item["Pain แรกรับ : ฟอร์มปรอท"] || "-";
+    const initNote = item["Pain แรกรับ : Nurse note"] || "-";
+    const q8Thermo = item["Pain q 8 hr : ฟอร์มปรอท"] || "-";
+    const q8Note = item["Pain q 8 hr : Nurse Note"] || "-";
+    const intervention = item["Intervention"] || "-";
+    const reassess = item["Re-assessment"] || "-";
+    const postOpThermo = item["Pain post-op แรกรับ : ฟอร์มปรอท"] || "-";
+    const postOpNote = item["Pain post-op แรกรับ : Nurse Note"] || "-";
+    const guideline = item["Guideline Post-op"] || "-";
+    const remark = item["หมายเหตุ"] || "";
+
     html += `
-      <div class="patient-history-card ${isSevere ? 'is-severe' : ''}">
+      <div class="patient-card ${isSevere ? 'is-severe' : ''} ${isSurgery ? 'is-surgery' : ''}">
         
-        <!-- Header การ์ด -->
-        <div class="patient-card-header">
-          <div class="patient-card-top-row">
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span class="row-num-tag">#${rowNum}</span>
-              <span class="hn-tag">HN ${hnDisplay}</span>
-              <button class="icon-btn-sm" title="คัดลอก HN" onclick="copyHN('${hnDisplay}')">
-                <i class="fa-regular fa-copy"></i>
-              </button>
+        <!-- 1. Header: Avatar + HN + Meta + Quick Action -->
+        <div class="p-card-header">
+          <div class="p-card-profile">
+            <div class="p-avatar ${isSevere ? 'av-severe' : (isSurgery ? 'av-surgery' : 'av-normal')}">
+              <i class="fa-solid ${isSevere ? 'fa-heart-crack' : (isSurgery ? 'fa-hospital-user' : 'fa-user-check')}"></i>
             </div>
-            
-            <button class="btn-continue-entry" onclick="fillFormForAN('${hnDisplay}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
-              <i class="fa-solid fa-clone"></i> บันทึกต่อ
-            </button>
+            <div class="p-meta">
+              <div class="p-hn-row">
+                <span class="p-hn">HN ${hnDisplay}</span>
+                <button class="p-btn-copy" title="คัดลอก HN" onclick="copyHN('${hnDisplay}')">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </div>
+              <div class="p-sub-meta">
+                <span class="p-row-idx">ลำดับ #${rowNum}</span>
+                <span class="p-dot">•</span>
+                <span class="p-tool-tag">${toolDisplay}</span>
+              </div>
+            </div>
           </div>
           
-          <div class="patient-card-badges-row">
-            <span class="badge badge-tool"><i class="fa-solid fa-ruler"></i> ${toolDisplay}</span>
-            ${isSevere ? `<span class="badge badge-pain-alert"><i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5</span>` : `<span class="badge badge-ok"><i class="fa-solid fa-check"></i> Pain &lt; 5</span>`}
-            ${isSurgery ? `<span class="badge badge-surgery"><i class="fa-solid fa-syringe"></i> ผ่าตัด</span>` : ``}
-          </div>
+          <button class="btn-p-continue" onclick="fillFormForAN('${hnDisplay}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>บันทึกต่อ</span>
+          </button>
         </div>
-        
-        <!-- รายละเอียดประเมิน Grid สไตล์ Responsive -->
-        <div class="patient-card-grid">
-          <div class="patient-grid-item">
-            <span class="d-label" style="font-size:0.75rem; color:#64748b; font-weight:600;">Pain แรกรับ (ปรอท / Note):</span>
-            <div class="d-val-badges">
-              <span class="${item["Pain แรกรับ : ฟอร์มปรอท"] === 'YES' ? 'val-pill-yes' : 'val-pill-no'}">
-                ปรอท: ${item["Pain แรกรับ : ฟอร์มปรอท"] || '-'}
-              </span>
-              <span class="${item["Pain แรกรับ : Nurse note"] === 'YES' ? 'val-pill-yes' : 'val-pill-no'}">
-                Note: ${item["Pain แรกรับ : Nurse note"] || '-'}
-              </span>
-            </div>
-          </div>
 
-          <div class="patient-grid-item">
-            <span class="d-label" style="font-size:0.75rem; color:#64748b; font-weight:600;">Pain q 8 hr (ปรอท / Note):</span>
-            <div class="d-val-badges">
-              <span class="${item["Pain q 8 hr : ฟอร์มปรอท"] === 'YES' ? 'val-pill-yes' : 'val-pill-no'}">
-                ปรอท: ${item["Pain q 8 hr : ฟอร์มปรอท"] || '-'}
-              </span>
-              <span class="${item["Pain q 8 hr : Nurse Note"] === 'YES' ? 'val-pill-yes' : 'val-pill-no'}">
-                Note: ${item["Pain q 8 hr : Nurse Note"] || '-'}
-              </span>
-            </div>
-          </div>
-          
+        <!-- 2. Status Badges Row -->
+        <div class="p-status-strip">
           ${isSevere ? `
-            <div class="patient-grid-item alert-box-severe">
-              <span style="font-size:0.75rem; color:#c2410c; font-weight:700; display:block;">
-                <i class="fa-solid fa-triangle-exclamation"></i> การจัดการความปวดรุนแรง:
-              </span>
-              <div style="color:#9a3412; font-size:0.8rem; margin-top:2px;">
-                Intervention: <strong>${item["Intervention"] || '-'}</strong> | 
-                ประเมินซ้ำ: <strong class="${item["Re-assessment"] === 'YES' ? 'text-yes' : ''}">${item["Re-assessment"] || '-'}</strong>
-              </div>
-            </div>
-          ` : ''}
-
+            <span class="p-status-pill pill-severe">
+              <i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5 (ปวดรุนแรง)
+            </span>
+          ` : `
+            <span class="p-status-pill pill-ok">
+              <i class="fa-solid fa-circle-check"></i> Pain &lt; 5 (ปกติ)
+            </span>
+          `}
           ${isSurgery ? `
-            <div class="patient-grid-item alert-box-surgery">
-              <span style="font-size:0.75rem; color:#15803d; font-weight:700; display:block;">
-                <i class="fa-solid fa-syringe"></i> การดูแลหลังผ่าตัด (Post-op):
-              </span>
-              <div style="color:#166534; font-size:0.8rem; margin-top:2px;">
-                ปรอท: <strong>${item["Pain post-op แรกรับ : ฟอร์มปรอท"] || '-'}</strong> | 
-                Note: <strong>${item["Pain post-op แรกรับ : Nurse Note"] || '-'}</strong> | 
-                Guideline: <strong class="${item["Guideline Post-op"] === 'YES' ? 'text-yes' : ''}">${item["Guideline Post-op"] || '-'}</strong>
-              </div>
-            </div>
+            <span class="p-status-pill pill-surgery">
+              <i class="fa-solid fa-syringe"></i> ผ่าตัด (Surgery)
+            </span>
           ` : ''}
         </div>
-        
-        ${item["หมายเหตุ"] ? `
-          <div class="patient-card-remark">
-            <strong style="color:#be123c;"><i class="fa-regular fa-comment-dots"></i> หมายเหตุ:</strong> ${item["หมายเหตุ"]}
+
+        <!-- 3. Primary Assessment Dual Grid (Pain แรกรับ vs Pain q 8 hr) -->
+        <div class="p-assessment-grid">
+          
+          <!-- Box A: Pain แรกรับ -->
+          <div class="p-metric-box">
+            <div class="p-box-head">
+              <i class="fa-solid fa-temperature-three-quarters" style="color:#6366f1;"></i>
+              <span>Pain แรกรับ</span>
+            </div>
+            <div class="p-box-body">
+              <div class="p-field-row">
+                <span class="p-field-label">ปรอท:</span>
+                <span class="p-val-pill ${initThermo === 'YES' ? 'val-yes' : 'val-no'}">
+                  ${initThermo === 'YES' ? '<i class="fa-solid fa-check"></i> YES' : (initThermo === 'NO' ? '<i class="fa-solid fa-xmark"></i> NO' : '-')}
+                </span>
+              </div>
+              <div class="p-field-row">
+                <span class="p-field-label">Note:</span>
+                <span class="p-val-pill ${initNote === 'YES' ? 'val-yes' : 'val-no'}">
+                  ${initNote === 'YES' ? '<i class="fa-solid fa-check"></i> YES' : (initNote === 'NO' ? '<i class="fa-solid fa-xmark"></i> NO' : '-')}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Box B: Pain q 8 hr -->
+          <div class="p-metric-box">
+            <div class="p-box-head">
+              <i class="fa-solid fa-clock-rotate-left" style="color:#8b5cf6;"></i>
+              <span>Pain q 8 hr</span>
+            </div>
+            <div class="p-box-body">
+              <div class="p-field-row">
+                <span class="p-field-label">ปรอท:</span>
+                <span class="p-val-pill ${q8Thermo === 'YES' ? 'val-yes' : 'val-no'}">
+                  ${q8Thermo === 'YES' ? '<i class="fa-solid fa-check"></i> YES' : (q8Thermo === 'NO' ? '<i class="fa-solid fa-xmark"></i> NO' : '-')}
+                </span>
+              </div>
+              <div class="p-field-row">
+                <span class="p-field-label">Note:</span>
+                <span class="p-val-pill ${q8Note === 'YES' ? 'val-yes' : 'val-no'}">
+                  ${q8Note === 'YES' ? '<i class="fa-solid fa-check"></i> YES' : (q8Note === 'NO' ? '<i class="fa-solid fa-xmark"></i> NO' : '-')}
+                </span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 4. Special Condition: Pain >= 5 (If applicable) -->
+        ${isSevere ? `
+          <div class="p-special-card card-severe">
+            <div class="p-spec-title">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <span>การจัดการความปวดรุนแรง (Pain ≥ 5)</span>
+            </div>
+            <div class="p-spec-chips">
+              <div class="p-spec-chip">
+                <span class="c-label">Intervention:</span>
+                <span class="c-val highlight-warn">${intervention}</span>
+              </div>
+              <div class="p-spec-chip">
+                <span class="c-label">ประเมินซ้ำ:</span>
+                <span class="p-val-pill ${reassess === 'YES' ? 'val-yes' : 'val-no'}">
+                  ${reassess === 'YES' ? '<i class="fa-solid fa-check"></i> YES' : reassess}
+                </span>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- 5. Special Condition: Surgery (If applicable) -->
+        ${isSurgery ? `
+          <div class="p-special-card card-surgery">
+            <div class="p-spec-title">
+              <i class="fa-solid fa-syringe"></i>
+              <span>การดูแลผู้ป่วยหลังผ่าตัด (Post-op)</span>
+            </div>
+            <div class="p-spec-chips">
+              <div class="p-spec-chip">
+                <span class="c-label">ปรอทแรกรับ:</span>
+                <span class="p-val-pill ${postOpThermo === 'YES' ? 'val-yes' : 'val-no'}">
+                  ${postOpThermo === 'YES' ? '<i class="fa-solid fa-check"></i> YES' : postOpThermo}
+                </span>
+              </div>
+              <div class="p-spec-chip">
+                <span class="c-label">Nurse Note:</span>
+                <span class="p-val-pill ${postOpNote === 'YES' ? 'val-yes' : 'val-no'}">
+                  ${postOpNote === 'YES' ? '<i class="fa-solid fa-check"></i> YES' : postOpNote}
+                </span>
+              </div>
+              <div class="p-spec-chip">
+                <span class="c-label">Guideline:</span>
+                <span class="p-val-pill ${guideline === 'YES' ? 'val-yes' : 'val-no'}">
+                  ${guideline === 'YES' ? '<i class="fa-solid fa-check"></i> YES' : guideline}
+                </span>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- 6. Remarks (If exists) -->
+        ${remark ? `
+          <div class="p-remark-box">
+            <i class="fa-regular fa-comment-dots"></i>
+            <span><strong>หมายเหตุ:</strong> ${remark}</span>
           </div>
         ` : ''}
 
