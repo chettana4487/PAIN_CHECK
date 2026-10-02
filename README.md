@@ -1,0 +1,70 @@
+# ระบบตรวจสอบและบันทึกอาการปวดคนไข้ (Pain Assessment & Tracking Web App)
+ออกแบบสำหรับมือถือ (Mobile), แท็บเล็ต (Tablet) และคอมพิวเตอร์ เพื่อบุคลากรทางการแพทย์และพยาบาล
+
+---
+
+## 🌟 ฟังก์ชันเด่นของระบบ
+1. **ออกแบบ Responsive (Mobile-First)**: โทนสี Sunset Pastel สวยงาม น่าใช้ สบายตา ตามแบบภาพตัวอย่าง
+2. **Dynamic Logic ตรวจสอบอาการปวด**:
+   - เมื่อเลือก **Pain ≥ 5\*\*** = `YES` -> ช่อง **Intervention** และ **Re-assessment** จะเปิดใช้งานและบังคับเลือก พร้อมกรอบเตือนสีส้ม
+   - เมื่อเลือก **Pain ≥ 5\*\*** = `NO` -> ช่อง Intervention และ Re-assessment จะกลายเป็นสีเทา (Disabled) โดยอัตโนมัติ
+   - เมื่อเลือก **Operation Surgery** = `YES` -> ระบบจะเปิดช่อง Pain post-op และ Guideline Post-op ให้กรอก
+3. **ระบบค้นหาประวัติ AN (เทียบเท่าชีต ค้นหา_AN)**:
+   - ค้นหาด้วยหมายเลข AN เพื่อดูประวัติการประเมินทั้งหมด เรียงลำดับจากล่าสุดไปหาเก่าสุด
+   - แสดง Timeline บันทึกอย่างชัดเจน พร้อมปุ่มลัด **"➕ บันทึกข้อมูลเพิ่มสำหรับ AN นี้"**
+   - **ไม่เขียนทับข้อมูลเดิม**: ระบบจะนำ AN และข้อมูลตั้งต้นมากรอกในฟอร์มให้ แล้วบันทึกเป็นแถวใหม่เสมอ
+4. **Dashboard & KPIs สรุปผล**:
+   - นับจำนวนรายการทั้งหมด, Pain แรกรับ YES, Pain q 8 hr YES, ผู้ป่วยผ่าตัด, Guideline Post-op YES, Pain ≥ 5
+   - กราฟสัดส่วนแยกตามหอผู้ป่วย (Wards) และเครื่องมือประเมิน (Tools)
+5. **ความพร้อมใช้งาน (Offline & Cloud Sync)**:
+   - ใช้งานได้ทันทีแม้ยังไม่ได้ต่อ Google Sheet (เก็บข้อมูลในเครื่องพร้อมมีข้อมูลตัวอย่าง)
+   - เชื่อมต่อ Google Sheet ผ่าน Google Apps Script Web App ได้อย่างสมบูรณ์แบบ
+
+---
+
+## 📋 โครงสร้างคอลัมน์ใน Google Sheet (ชีต Pain_Data)
+1. `Record ID` (สร้างรหัสอัตโนมัติ เช่น PID-20261002-140230-101)
+2. `วันที่และเวลา`
+3. `ผู้บันทึก`
+4. `AN`
+5. `หน่วยงาน` (4/2, 3/2, 3/3, 3/4, 3/5, 7/2, 7/3, 7/4, 7/5, 7/6, 5/1, 5/4, 5/5)
+6. `Tool` (Numeric Rating Score, Facial rating scale, CPOT)
+7. `Pain แรกรับ : ฟอร์มปรอท` (YES/NO)
+8. `Pain แรกรับ : Nurse note` (YES/NO)
+9. `Pain q 8 hr : ฟอร์มปรอท` (YES/NO)
+10. `Pain ≥ 5**` (YES/NO)
+11. `Intervention` (Medication, Non Medication, No record)
+12. `Re-assessment` (YES/NO)
+13. `Operation Surgery` (YES/NO)
+14. `Pain post-op แรกรับ : ฟอร์มปรอท` (YES/NO)
+15. `Pain post-op แรกรับ : Nurse Note` (YES/NO)
+16. `Guideline Post-op` (YES/NO)
+17. `หมายเหตุ`
+
+---
+
+## 🚀 วิธีติดตั้งเชื่อมต่อกับ Google Sheet
+
+### ขั้นตอนที่ 1: นำโค้ด Apps Script ไปวางใน Google Sheet
+1. เปิด Google Sheet ของท่าน: [Google Spreadsheet (ชีตใหม่)](https://docs.google.com/spreadsheets/d/1qawG_VPCRk23Rh-L4OrgySnIQnztjGSY6jwAYnTW-TQ/edit)
+2. ที่เมนูด้านบน เลือก **ส่วนขยาย (Extensions)** > **Apps Script**
+3. ลบโค้ดเดิมทั้งหมดออก แล้วเปิดไฟล์ [google-apps-script.js](file:///d:/Users/chettana_s/Desktop/PAIN/APP/google-apps-script.js) คัดลอกโค้ดทั้งหมดไปวาง
+4. กดไอคอน **บันทึก (Save)** (รูปแผ่นดิสก์)
+
+### ขั้นตอนที่ 2: เผยแพร่เป็น Web App (Deploy)
+1. กดปุ่มสีน้ำเงิน **"การทำให้ใช้งานได้" (Deploy)** ด้านขวาบน > เลือก **"การทำให้ใช้งานได้รายการใหม่" (New deployment)**
+2. คลิกรูปฟันเฟือง ⚙️ ข้าง "เลือกประเภท" แล้วเลือก **"เว็บแอป" (Web app)**
+3. ตั้งค่าดังนี้:
+   - **คำอธิบาย**: `Pain Care API`
+   - **ดำเนินการในฐานะ (Execute as)**: `ฉัน (Me)`
+   - **ผู้ที่มีสิทธิ์เข้าถึง (Who has access)**: `ทุกคน (Anyone)` *(สำคัญมาก)*
+4. กดปุ่ม **ทำให้ใช้งานได้ (Deploy)**
+5. กดยอมรับสิทธิ์การเข้าถึง (Authorize access)
+6. คัดลอก **URL ของเว็บแอป (Web app URL)** (ที่ลงท้ายด้วย `/exec`)
+
+### ขั้นตอนที่ 3: นำ URL มาใส่ใน Web App
+1. เปิดไฟล์ [index.html](file:///d:/Users/chettana_s/Desktop/PAIN/APP/index.html) ในเว็บเบราว์เซอร์
+2. กดไอคอนรูปฟันเฟือง ⚙️ (หรือเมนู "ตั้งค่าชีต" ด้านล่างบนมือถือ)
+3. วาง Web App URL ที่คัดลอกมาลงในช่อง
+4. กดปุ่ม **"ทดสอบการเชื่อมต่อ"** แล้วกด **"บันทึกการตั้งค่า"**
+5. ตอนนี้เมื่อพยาบาลบันทึกข้อมูล ข้อมูลจะถูกส่งเข้าไปยังชีต `Pain_Data` และมีระบบกรองอัตโนมัติในชีต `ค้นหา_AN` ทันที!
