@@ -231,7 +231,7 @@ function normalizeRecord(item) {
 // Google Apps Script Web App URL เริ่มต้น
 // (หากใส่ URL ไว้ที่นี่ พยาบาลและทุกคนที่เปิดเว็บจะเชื่อมต่อชีตให้อัตโนมัติทันที ไม่ต้องตั้งค่าในมือถือแต่ละเครื่อง)
 // ========================================================
-const DEFAULT_SCRIPT_URL = "";
+const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw-rC3DdTBCiCLNz_cE3IqJLvLRFdXrAVW6c3-1A8GfJlMELrNTenJr4QP86acUzwKq/exec";
 
 // App State
 let state = {
@@ -252,6 +252,7 @@ const elements = {};
 document.addEventListener("DOMContentLoaded", () => {
   initDOMElements();
   initDropdownOptions();
+  populateSheetDropdowns(state.sheets, state.currentSheet);
   loadStoredRecords();
   bindEvents();
   document.body.setAttribute("data-active-tab", "form");
@@ -297,6 +298,12 @@ function initDOMElements() {
   elements.historySearchTitle = document.getElementById("historySearchTitle");
   elements.historyShowingSummary = document.getElementById("historyShowingSummary");
   elements.btnQuickCheckHN = document.getElementById("btnQuickCheckHN");
+  
+  // History Top Controls
+  elements.selectHistoryMonth = document.getElementById("selectHistoryMonth");
+  elements.btnRefreshHistorySheets = document.getElementById("btnRefreshHistorySheets");
+  elements.inputHistorySearch = document.getElementById("inputHistorySearch");
+  elements.btnClearHistorySearch = document.getElementById("btnClearHistorySearch");
   
   // View Switchers
   elements.btnViewCards = document.getElementById("btnViewCards");
@@ -378,6 +385,49 @@ function bindEvents() {
     elements.formTargetSheet.addEventListener("change", (e) => {
       state.currentSheet = e.target.value;
       if (elements.selectSheetMonth) elements.selectSheetMonth.value = e.target.value;
+      if (elements.selectHistoryMonth) elements.selectHistoryMonth.value = e.target.value;
+    });
+  }
+
+  // Integrated History Month Selector
+  if (elements.selectHistoryMonth) {
+    elements.selectHistoryMonth.addEventListener("change", (e) => {
+      const selected = e.target.value;
+      if (selected) {
+        state.currentSheet = selected;
+        if (elements.selectSheetMonth) elements.selectSheetMonth.value = selected;
+        if (elements.formTargetSheet) elements.formTargetSheet.value = selected;
+        fetchFromGoogleSheet(selected);
+      }
+    });
+  }
+
+  if (elements.btnRefreshHistorySheets) {
+    elements.btnRefreshHistorySheets.addEventListener("click", () => {
+      fetchSheetList(true);
+    });
+  }
+
+  // Integrated History Search Input
+  if (elements.inputHistorySearch) {
+    elements.inputHistorySearch.addEventListener("input", (e) => {
+      const val = e.target.value.trim();
+      state.activeSearchHN = val;
+      if (elements.searchANInput) elements.searchANInput.value = val;
+      if (elements.btnClearHistorySearch) {
+        elements.btnClearHistorySearch.style.display = val ? "flex" : "none";
+      }
+      renderHistoryView();
+    });
+  }
+
+  if (elements.btnClearHistorySearch) {
+    elements.btnClearHistorySearch.addEventListener("click", () => {
+      if (elements.inputHistorySearch) elements.inputHistorySearch.value = "";
+      if (elements.searchANInput) elements.searchANInput.value = "";
+      elements.btnClearHistorySearch.style.display = "none";
+      state.activeSearchHN = "";
+      renderHistoryView();
     });
   }
 
@@ -394,7 +444,7 @@ function bindEvents() {
     });
   }
 
-  // Search in History
+  // Search in History (Sidebar)
   if (elements.btnSearchAN) {
     elements.btnSearchAN.addEventListener("click", () => {
       executeSearch();
@@ -413,6 +463,8 @@ function bindEvents() {
   if (elements.btnClearSearch) {
     elements.btnClearSearch.addEventListener("click", () => {
       if (elements.searchANInput) elements.searchANInput.value = "";
+      if (elements.inputHistorySearch) elements.inputHistorySearch.value = "";
+      if (elements.btnClearHistorySearch) elements.btnClearHistorySearch.style.display = "none";
       state.activeSearchHN = "";
       renderHistoryView();
     });
@@ -788,10 +840,10 @@ function renderHistoryView() {
 }
 
 /**
- * แสดงผลแบบการ์ด (Card View - สวยหรู สบายตาบนมือถือ)
+ * แสดงผลแบบการ์ด (Card View - สวยหรู สบายตาบนมือถือ ไม่ล้นจอ)
  */
 function renderCardView(list, container) {
-  let html = `<div style="display:flex; flex-direction:column; gap:12px;">`;
+  let html = `<div style="display:flex; flex-direction:column; gap:10px;">`;
   
   list.forEach((item, idx) => {
     const isSevere = String(item["Pain ≥ 5**"]).toUpperCase() === "YES";
@@ -801,79 +853,88 @@ function renderCardView(list, container) {
     const rowNum = item["_rowIndex"] ? item._rowIndex - 2 : (idx + 1);
     
     html += `
-      <div style="background:white; border:1px solid ${isSevere ? '#fca5a5' : '#e2e8f0'}; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); position:relative;">
+      <div class="patient-history-card ${isSevere ? 'is-severe' : ''}">
         
         <!-- Header การ์ด -->
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-size:0.75rem; background:#f1f5f9; color:#475569; font-weight:700; padding:2px 7px; border-radius:6px;">
-              #${rowNum}
-            </span>
-            <span class="hn-tag">HN ${hnDisplay}</span>
-            <button class="icon-btn" style="width:26px; height:26px; font-size:0.7rem;" title="คัดลอก HN" onclick="copyHN('${hnDisplay}')">
-              <i class="fa-regular fa-copy"></i>
+        <div class="patient-card-header">
+          <div class="patient-card-top-row">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="row-num-tag">#${rowNum}</span>
+              <span class="hn-tag">HN ${hnDisplay}</span>
+              <button class="icon-btn-sm" title="คัดลอก HN" onclick="copyHN('${hnDisplay}')">
+                <i class="fa-regular fa-copy"></i>
+              </button>
+            </div>
+            
+            <button class="btn-continue-entry" onclick="fillFormForAN('${hnDisplay}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
+              <i class="fa-solid fa-clone"></i> บันทึกต่อ
             </button>
           </div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          
+          <div class="patient-card-badges-row">
             <span class="badge badge-tool"><i class="fa-solid fa-ruler"></i> ${toolDisplay}</span>
-            ${isSevere ? `<span class="badge badge-pain-alert"><i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5</span>` : `<span class="badge badge-ok">Pain &lt; 5</span>`}
+            ${isSevere ? `<span class="badge badge-pain-alert"><i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5</span>` : `<span class="badge badge-ok"><i class="fa-solid fa-check"></i> Pain &lt; 5</span>`}
             ${isSurgery ? `<span class="badge badge-surgery"><i class="fa-solid fa-syringe"></i> ผ่าตัด</span>` : ``}
           </div>
         </div>
         
-        <!-- รายละเอียดประเมิน 2 คอลัมน์ -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; background:#f8fafc; padding:10px 12px; border-radius:8px; font-size:0.82rem;">
-          
-          <div>
-            <span style="font-size:0.72rem; color:#64748b; display:block;">Pain แรกรับ (ปรอท / Nurse Note)</span>
-            <span style="font-weight:700;">
-              <span class="${item["Pain แรกรับ : ฟอร์มปรอท"] === 'YES' ? 'text-yes' : 'text-no'}">${item["Pain แรกรับ : ฟอร์มปรอท"] || '-'}</span> / 
-              <span class="${item["Pain แรกรับ : Nurse note"] === 'YES' ? 'text-yes' : 'text-no'}">${item["Pain แรกรับ : Nurse note"] || '-'}</span>
-            </span>
+        <!-- รายละเอียดประเมิน Grid สไตล์ Responsive -->
+        <div class="patient-card-grid">
+          <div class="patient-grid-item">
+            <span class="d-label" style="font-size:0.75rem; color:#64748b; font-weight:600;">Pain แรกรับ (ปรอท / Note):</span>
+            <div class="d-val-badges">
+              <span class="${item["Pain แรกรับ : ฟอร์มปรอท"] === 'YES' ? 'val-pill-yes' : 'val-pill-no'}">
+                ปรอท: ${item["Pain แรกรับ : ฟอร์มปรอท"] || '-'}
+              </span>
+              <span class="${item["Pain แรกรับ : Nurse note"] === 'YES' ? 'val-pill-yes' : 'val-pill-no'}">
+                Note: ${item["Pain แรกรับ : Nurse note"] || '-'}
+              </span>
+            </div>
           </div>
 
-          <div>
-            <span style="font-size:0.72rem; color:#64748b; display:block;">Pain q 8 hr (ปรอท / Nurse Note)</span>
-            <span style="font-weight:700;">
-              <span class="${item["Pain q 8 hr : ฟอร์มปรอท"] === 'YES' ? 'text-yes' : 'text-no'}">${item["Pain q 8 hr : ฟอร์มปรอท"] || '-'}</span> / 
-              <span class="${item["Pain q 8 hr : Nurse Note"] === 'YES' ? 'text-yes' : 'text-no'}">${item["Pain q 8 hr : Nurse Note"] || '-'}</span>
-            </span>
+          <div class="patient-grid-item">
+            <span class="d-label" style="font-size:0.75rem; color:#64748b; font-weight:600;">Pain q 8 hr (ปรอท / Note):</span>
+            <div class="d-val-badges">
+              <span class="${item["Pain q 8 hr : ฟอร์มปรอท"] === 'YES' ? 'val-pill-yes' : 'val-pill-no'}">
+                ปรอท: ${item["Pain q 8 hr : ฟอร์มปรอท"] || '-'}
+              </span>
+              <span class="${item["Pain q 8 hr : Nurse Note"] === 'YES' ? 'val-pill-yes' : 'val-pill-no'}">
+                Note: ${item["Pain q 8 hr : Nurse Note"] || '-'}
+              </span>
+            </div>
           </div>
           
           ${isSevere ? `
-            <div style="grid-column: 1 / -1; background:#fff7ed; padding:6px 10px; border-radius:6px; border-left:3px solid #f97316;">
-              <span style="font-size:0.72rem; color:#c2410c; font-weight:700; display:block;">การจัดการความปวดรุนแรง:</span>
-              <span style="color:#9a3412; font-size:0.8rem;">
-                Intervention: <strong>${item["Intervention"] || '-'}</strong> | 
-                Re-assessment: <strong class="${item["Re-assessment"] === 'YES' ? 'text-yes' : ''}">${item["Re-assessment"] || '-'}</strong>
+            <div class="patient-grid-item alert-box-severe">
+              <span style="font-size:0.75rem; color:#c2410c; font-weight:700; display:block;">
+                <i class="fa-solid fa-triangle-exclamation"></i> การจัดการความปวดรุนแรง:
               </span>
+              <div style="color:#9a3412; font-size:0.8rem; margin-top:2px;">
+                Intervention: <strong>${item["Intervention"] || '-'}</strong> | 
+                ประเมินซ้ำ: <strong class="${item["Re-assessment"] === 'YES' ? 'text-yes' : ''}">${item["Re-assessment"] || '-'}</strong>
+              </div>
             </div>
           ` : ''}
 
           ${isSurgery ? `
-            <div style="grid-column: 1 / -1; background:#f0fdf4; padding:6px 10px; border-radius:6px; border-left:3px solid #10b981;">
-              <span style="font-size:0.72rem; color:#15803d; font-weight:700; display:block;">การดูแลหลังผ่าตัด (Post-op):</span>
-              <span style="color:#166534; font-size:0.8rem;">
+            <div class="patient-grid-item alert-box-surgery">
+              <span style="font-size:0.75rem; color:#15803d; font-weight:700; display:block;">
+                <i class="fa-solid fa-syringe"></i> การดูแลหลังผ่าตัด (Post-op):
+              </span>
+              <div style="color:#166534; font-size:0.8rem; margin-top:2px;">
                 ปรอท: <strong>${item["Pain post-op แรกรับ : ฟอร์มปรอท"] || '-'}</strong> | 
                 Note: <strong>${item["Pain post-op แรกรับ : Nurse Note"] || '-'}</strong> | 
                 Guideline: <strong class="${item["Guideline Post-op"] === 'YES' ? 'text-yes' : ''}">${item["Guideline Post-op"] || '-'}</strong>
-              </span>
+              </div>
             </div>
           ` : ''}
-
         </div>
         
         ${item["หมายเหตุ"] ? `
-          <div style="margin-top:8px; font-size:0.78rem; color:#475569; background:#fff1f2; padding:6px 10px; border-radius:6px; border-left:3px solid #f43f5e;">
-            <strong style="color:#be123c;">หมายเหตุ:</strong> ${item["หมายเหตุ"]}
+          <div class="patient-card-remark">
+            <strong style="color:#be123c;"><i class="fa-regular fa-comment-dots"></i> หมายเหตุ:</strong> ${item["หมายเหตุ"]}
           </div>
         ` : ''}
-
-        <div style="margin-top:10px; display:flex; justify-content:flex-end;">
-          <button class="btn-secondary" style="padding:4px 12px; font-size:0.75rem; border-radius:20px;" onclick="fillFormForAN('${hnDisplay}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
-            <i class="fa-solid fa-clone"></i> ลงข้อมูลต่อจาก HN นี้
-          </button>
-        </div>
 
       </div>
     `;
@@ -1227,6 +1288,10 @@ function populateSheetDropdowns(sheets, activeSheet = "") {
     elements.formTargetSheet.innerHTML = optionsHtml;
     elements.formTargetSheet.value = activeSheet;
   }
+  if (elements.selectHistoryMonth) {
+    elements.selectHistoryMonth.innerHTML = optionsHtml;
+    elements.selectHistoryMonth.value = activeSheet;
+  }
 }
 
 async function fetchSheetList(forceRefresh = false) {
@@ -1281,14 +1346,15 @@ async function fetchFromGoogleSheet(targetSheet = "") {
   
   try {
     let result = null;
-    const url = `${state.googleScriptUrl}?action=getAll&sheetName=${encodeURIComponent(sheetToFetch)}&_t=${Date.now()}`;
+    const url = `${state.googleScriptUrl}?action=getData&sheet=${encodeURIComponent(sheetToFetch)}&sheetName=${encodeURIComponent(sheetToFetch)}&_t=${Date.now()}`;
     
     try {
       const res = await fetch(url);
       result = await res.json();
     } catch (fetchErr) {
       result = await fetchJsonp(state.googleScriptUrl, { 
-        action: "getAll", 
+        action: "getData", 
+        sheet: sheetToFetch,
         sheetName: sheetToFetch 
       });
     }

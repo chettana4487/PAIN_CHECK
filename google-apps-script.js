@@ -58,7 +58,7 @@ function doGet(e) {
     e = e || { parameter: {} };
     const action = (e.parameter && e.parameter.action) || "getData";
     const callback = e.parameter && e.parameter.callback;
-    const targetSheetName = (e.parameter && e.parameter.sheet) || "";
+    const targetSheetName = (e.parameter && (e.parameter.sheet || e.parameter.sheetName)) || "";
     const ss = getSpreadsheet();
     const sheetList = getSheetNames(ss);
     
@@ -68,7 +68,7 @@ function doGet(e) {
     }
     
     // 2. ดึงข้อมูล
-    if (action === "getData") {
+    if (action === "getData" || action === "getAll") {
       let sheet = null;
       if (targetSheetName) {
         sheet = ss.getSheetByName(targetSheetName);
