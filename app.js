@@ -767,6 +767,9 @@ function renderHistoryView() {
   
   let list = [...state.records];
   
+  // กรองแถวว่าง หรือแถวที่ไม่มี HN ออก (ป้องกันแถวหัวตารางหรือแถวเปล่า)
+  list = list.filter(item => item && item.HN && item.HN !== "ไม่ระบุ" && item.HN !== "HN" && item._rowIndex !== 2);
+  
   // 1. กรองตาม Search HN
   if (state.activeSearchHN) {
     const q = state.activeSearchHN.toLowerCase();
@@ -850,7 +853,7 @@ function renderCardView(list, container) {
     const isSurgery = String(item["Operation Surgery"]).toUpperCase() === "YES";
     const hnDisplay = item["HN"] || item["AN"] || "ไม่ระบุ";
     const toolDisplay = item["Tool"] || "Numeric Rating Score";
-    const rowNum = item["_rowIndex"] ? item._rowIndex - 2 : (idx + 1);
+    const rowNum = idx + 1;
     
     html += `
       <div class="patient-history-card ${isSevere ? 'is-severe' : ''}">
@@ -976,7 +979,7 @@ function renderSpreadsheetTableView(list, container) {
   
   list.forEach((item, idx) => {
     const isSevere = String(item["Pain ≥ 5**"]).toUpperCase() === "YES";
-    const rowNum = item["_rowIndex"] ? item._rowIndex - 2 : (idx + 1);
+    const rowNum = idx + 1;
     const hn = item["HN"] || item["AN"] || "-";
     
     html += `
@@ -1311,6 +1314,7 @@ async function fetchSheetList(forceRefresh = false) {
     
     if (result && result.status === "success" && Array.isArray(result.sheets)) {
       populateSheetDropdowns(result.sheets, state.currentSheet);
+      fetchFromGoogleSheet(state.currentSheet);
       if (forceRefresh) {
         showToast(`อัปเดตรายชื่อชีตเรียบร้อย (พบ ${state.sheets.length} เดือน)`, "success");
       }
@@ -1360,12 +1364,14 @@ async function fetchFromGoogleSheet(targetSheet = "") {
     }
     
     if (result && result.status === "success" && Array.isArray(result.data)) {
-      state.records = result.data.map(r => normalizeRecord(r));
+      state.records = result.data
+        .map(r => normalizeRecord(r))
+        .filter(r => r && r.HN && r.HN !== "ไม่ระบุ" && r.HN !== "HN" && r._rowIndex !== 2);
       state.currentSheet = sheetToFetch;
       saveRecordsToLocal();
       renderKPIs();
       renderHistoryView();
-      showToast(`โหลดข้อมูลชีต "${sheetToFetch}" สำเร็จ (${result.count || state.records.length} รายการ)`, "success");
+      showToast(`โหลดข้อมูลชีต "${sheetToFetch}" สำเร็จ (${state.records.length} รายการ)`, "success");
     } else {
       throw new Error(result ? result.message : "ข้อมูลไม่ถูกต้อง");
     }
@@ -1434,18 +1440,26 @@ function updateSyncStatusBadge() {
 
 function saveRecordsToLocal() {
   try {
-    localStorage.setItem("painApp_records", JSON.stringify(state.records));
+    localStorage.setItem("painApp_records_v2", JSON.stringify(state.records));
   } catch (e) {}
 }
 
 function loadStoredRecords() {
   try {
-    const raw = localStorage.getItem("painApp_records");
+    // ล้าง cache เก่าที่อาจมีข้อมูลตกค้าง
+    localStorage.removeItem("painApp_records");
+    
+    const raw = localStorage.getItem("painApp_records_v2");
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        state.records = parsed.map(r => normalizeRecord(r));
-        return;
+        const valid = parsed
+          .map(r => normalizeRecord(r))
+          .filter(r => r && r.HN && r.HN !== "ไม่ระบุ" && r.HN !== "HN" && r._rowIndex !== 2);
+        if (valid.length > 0) {
+          state.records = valid;
+          return;
+        }
       }
     }
   } catch (e) {}
