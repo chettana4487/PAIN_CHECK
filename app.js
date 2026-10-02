@@ -1171,51 +1171,81 @@ function renderAnalytics() {
   containerQA.innerHTML = `
     <div class="qa-metric-row">
       <div class="qa-metric-top">
-        <span class="qa-metric-title">1. การประเมินแรกรับครบถ้วน (ปรอท + Note = YES)</span>
-        <span class="qa-metric-pct" style="color:${pctFirst >= 90 ? '#10b981' : '#f59e0b'};">${pctFirst}% (${firstYes}/${total})</span>
+        <div class="qa-metric-info">
+          <div class="qa-metric-title">1. การประเมินแรกรับครบถ้วน</div>
+          <div class="qa-metric-sub">ฟอร์มปรอท และ Nurse Note = YES</div>
+        </div>
+        <div class="qa-metric-badge ${pctFirst >= 90 ? 'badge-good' : 'badge-warn'}">
+          <span class="qa-badge-pct">${pctFirst}%</span>
+          <span class="qa-badge-fraction">${firstYes}/${total} เคส</span>
+        </div>
       </div>
       <div class="qa-progress-bg">
-        <div class="qa-progress-fill" style="width:${pctFirst}%; background:${pctFirst >= 90 ? '#10b981' : '#f59e0b'};"></div>
+        <div class="qa-progress-fill ${pctFirst >= 90 ? 'fill-good' : 'fill-warn'}" style="width:${pctFirst}%;"></div>
       </div>
     </div>
 
     <div class="qa-metric-row">
       <div class="qa-metric-top">
-        <span class="qa-metric-title">2. การประเมิน Pain q 8 hr ครบถ้วน (ปรอท + Note = YES)</span>
-        <span class="qa-metric-pct" style="color:${pctQ8 >= 90 ? '#10b981' : '#f59e0b'};">${pctQ8}% (${q8Yes}/${total})</span>
+        <div class="qa-metric-info">
+          <div class="qa-metric-title">2. การประเมิน Pain q 8 hr ครบถ้วน</div>
+          <div class="qa-metric-sub">ฟอร์มปรอท และ Nurse Note = YES</div>
+        </div>
+        <div class="qa-metric-badge ${pctQ8 >= 90 ? 'badge-good' : 'badge-warn'}">
+          <span class="qa-badge-pct">${pctQ8}%</span>
+          <span class="qa-badge-fraction">${q8Yes}/${total} เคส</span>
+        </div>
       </div>
       <div class="qa-progress-bg">
-        <div class="qa-progress-fill" style="width:${pctQ8}%; background:${pctQ8 >= 90 ? '#10b981' : '#f59e0b'};"></div>
+        <div class="qa-progress-fill ${pctQ8 >= 90 ? 'fill-good' : 'fill-warn'}" style="width:${pctQ8}%;"></div>
       </div>
     </div>
 
     <div class="qa-metric-row">
       <div class="qa-metric-top">
-        <span class="qa-metric-title">3. อัตราเกิด Pain ≥ 5 (ปวดรุนแรง)</span>
-        <span class="qa-metric-pct" style="color:#ef4444;">${pctSevere}% (${severeCount}/${total})</span>
+        <div class="qa-metric-info">
+          <div class="qa-metric-title">3. อัตราเกิด Pain ≥ 5 (ปวดรุนแรง)</div>
+          <div class="qa-metric-sub">ผู้ป่วยที่มีอาการปวดคะแนน 5 ขึ้นไป</div>
+        </div>
+        <div class="qa-metric-badge badge-danger">
+          <span class="qa-badge-pct">${pctSevere}%</span>
+          <span class="qa-badge-fraction">${severeCount}/${total} เคส</span>
+        </div>
       </div>
       <div class="qa-progress-bg">
-        <div class="qa-progress-fill" style="width:${pctSevere}%; background:#ef4444;"></div>
+        <div class="qa-progress-fill fill-danger" style="width:${pctSevere}%;"></div>
       </div>
     </div>
 
     <div class="qa-metric-row">
       <div class="qa-metric-top">
-        <span class="qa-metric-title">4. การประเมินซ้ำ (Re-assessment) ในเคส Pain ≥ 5</span>
-        <span class="qa-metric-pct" style="color:${pctReassess >= 90 ? '#10b981' : '#f59e0b'};">${pctReassess}% (${severeReassess}/${severeCount || 1})</span>
+        <div class="qa-metric-info">
+          <div class="qa-metric-title">4. การประเมินซ้ำ (Re-assessment)</div>
+          <div class="qa-metric-sub">ในกลุ่มเคสที่ปวดรุนแรง Pain ≥ 5</div>
+        </div>
+        <div class="qa-metric-badge ${pctReassess >= 90 ? 'badge-good' : 'badge-warn'}">
+          <span class="qa-badge-pct">${pctReassess}%</span>
+          <span class="qa-badge-fraction">${severeReassess}/${severeCount || 1} เคส</span>
+        </div>
       </div>
       <div class="qa-progress-bg">
-        <div class="qa-progress-fill" style="width:${pctReassess}%; background:${pctReassess >= 90 ? '#10b981' : '#f59e0b'};"></div>
+        <div class="qa-progress-fill ${pctReassess >= 90 ? 'fill-good' : 'fill-warn'}" style="width:${pctReassess}%;"></div>
       </div>
     </div>
 
     <div class="qa-metric-row">
       <div class="qa-metric-top">
-        <span class="qa-metric-title">5. ปฏิบัติตาม Guideline ในเคสผ่าตัด</span>
-        <span class="qa-metric-pct" style="color:${pctGuide >= 90 ? '#10b981' : '#f59e0b'};">${pctGuide}% (${surgeryGuide}/${surgeryCount || 1})</span>
+        <div class="qa-metric-info">
+          <div class="qa-metric-title">5. ปฏิบัติตาม Guideline ผ่าตัด</div>
+          <div class="qa-metric-sub">ผู้ป่วยผ่าตัดที่ได้รับการดูแลตามแนวทาง</div>
+        </div>
+        <div class="qa-metric-badge ${pctGuide >= 90 ? 'badge-good' : 'badge-warn'}">
+          <span class="qa-badge-pct">${pctGuide}%</span>
+          <span class="qa-badge-fraction">${surgeryGuide}/${surgeryCount || 1} เคส</span>
+        </div>
       </div>
       <div class="qa-progress-bg">
-        <div class="qa-progress-fill" style="width:${pctGuide}%; background:${pctGuide >= 90 ? '#10b981' : '#f59e0b'};"></div>
+        <div class="qa-progress-fill ${pctGuide >= 90 ? 'fill-good' : 'fill-warn'}" style="width:${pctGuide}%;"></div>
       </div>
     </div>
   `;
