@@ -278,7 +278,7 @@ function doPost(e) {
 }
 
 /**
- * ดึงข้อมูลทั้งหมดจากชีตแล้วแปลงเป็น Array of Objects
+ * ดึงข้อมูลทั้งหมดจากชีตแล้วแปลงเป็น Array of Objects (ตรวจจับหัวตารางอัตโนมัติ)
  */
 function getAllData(sheet) {
   const lastRow = sheet.getLastRow();
@@ -286,17 +286,37 @@ function getAllData(sheet) {
   
   if (lastRow <= 1) return [];
   
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  // ตรวจหา Header Row ที่แท้จริง (สแกนแถว 1 ถึง 4)
+  let headerRowIndex = 1;
+  let headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  let maxNonEmpty = headers.filter(h => String(h || "").trim() !== "").length;
+  
+  for (let r = 2; r <= Math.min(4, lastRow); r++) {
+    const candidate = sheet.getRange(r, 1, 1, lastCol).getValues()[0];
+    const candidateCount = candidate.filter(h => String(h || "").trim() !== "").length;
+    if (candidateCount > maxNonEmpty) {
+      maxNonEmpty = candidateCount;
+      headerRowIndex = r;
+      headers = candidate;
+    }
+  }
+  
+  const startDataRow = headerRowIndex + 1;
+  const numDataRows = lastRow - headerRowIndex;
+  if (numDataRows <= 0) return [];
+  
+  const rows = sheet.getRange(startDataRow, 1, numDataRows, lastCol).getValues();
   
   return rows.map((row, index) => {
-    const item = { _rowIndex: index + 2 };
+    const item = { _rowIndex: startDataRow + index, _sheetName: sheet.getName() };
     headers.forEach((header, colIndex) => {
+      const hStr = String(header || "").trim();
+      if (!hStr) return;
       let val = row[colIndex];
       if (val instanceof Date) {
         val = Utilities.formatDate(val, "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss");
       }
-      item[header.trim()] = val;
+      item[hStr] = val;
     });
     return item;
   });

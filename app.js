@@ -42,84 +42,141 @@ const INITIAL_DEMO_RECORDS = [
     "Pain post-op แรกรับ : Nurse Note": "YES",
     "Guideline Post-op": "YES",
     "หมายเหตุ": "ผู้ป่วยบ่นปวดแผลผ่าตัด Appendectomy ได้รับ Tramadol 50mg IV"
-  },
-  {
-    "Record ID": "PID-20261002-093010-102",
-    "วันที่และเวลา": "2026-10-02 09:30:00",
-    "ผู้บันทึก": "พว. นฤมล แก้วตา",
-    "AN": "67001234",
-    "หน่วยงาน": "4/2",
-    "Tool": "Numeric Rating Score",
-    "Pain แรกรับ : ฟอร์มปรอท": "YES",
-    "Pain แรกรับ : Nurse note": "YES",
-    "Pain q 8 hr : ฟอร์มปรอท": "YES",
-    "Pain ≥ 5**": "NO",
-    "Intervention": "",
-    "Re-assessment": "",
-    "Operation Surgery": "NO",
-    "Pain post-op แรกรับ : ฟอร์มปรอท": "NO",
-    "Pain post-op แรกรับ : Nurse Note": "NO",
-    "Guideline Post-op": "NO",
-    "หมายเหตุ": "ผู้ป่วยอาการทรงตัว ปวดระดับ 2 แนะนำการหายใจคลายปวด"
-  },
-  {
-    "Record ID": "PID-20261001-182045-103",
-    "วันที่และเวลา": "2026-10-01 18:20:00",
-    "ผู้บันทึก": "พว. วราภรณ์ สุขใจ",
-    "AN": "67005678",
-    "หน่วยงาน": "3/2",
-    "Tool": "Facial rating scale",
-    "Pain แรกรับ : ฟอร์มปรอท": "YES",
-    "Pain แรกรับ : Nurse note": "YES",
-    "Pain q 8 hr : ฟอร์มปรอท": "NO",
-    "Pain ≥ 5**": "YES",
-    "Intervention": "Non Medication",
-    "Re-assessment": "YES",
-    "Operation Surgery": "NO",
-    "Pain post-op แรกรับ : ฟอร์มปรอท": "NO",
-    "Pain post-op แรกรับ : Nurse Note": "NO",
-    "Guideline Post-op": "NO",
-    "หมายเหตุ": "ประคบเย็นบริเวณหัวเข่าด้านซ้าย ผู้ป่วยรู้สึกผ่อนคลายขึ้น"
-  },
-  {
-    "Record ID": "PID-20261001-110020-104",
-    "วันที่และเวลา": "2026-10-01 11:00:00",
-    "ผู้บันทึก": "พว. ศิริพร สมบูรณ์",
-    "AN": "67009876",
-    "หน่วยงาน": "7/3",
-    "Tool": "CPOT",
-    "Pain แรกรับ : ฟอร์มปรอท": "YES",
-    "Pain แรกรับ : Nurse note": "YES",
-    "Pain q 8 hr : ฟอร์มปรอท": "YES",
-    "Pain ≥ 5**": "NO",
-    "Intervention": "",
-    "Re-assessment": "",
-    "Operation Surgery": "YES",
-    "Pain post-op แรกรับ : ฟอร์มปรอท": "YES",
-    "Pain post-op แรกรับ : Nurse Note": "YES",
-    "Guideline Post-op": "YES",
-    "หมายเหตุ": "Post op exploratory laparotomy วันที่ 1 On ventilator สังเกต CPOT = 2"
-  },
-  {
-    "Record ID": "PID-20260930-154512-105",
-    "วันที่และเวลา": "2026-09-30 15:45:00",
-    "ผู้บันทึก": "พว. ปรียานุช รัตนพร",
-    "AN": "67001234",
-    "หน่วยงาน": "4/2",
-    "Tool": "Numeric Rating Score",
-    "Pain แรกรับ : ฟอร์มปรอท": "YES",
-    "Pain แรกรับ : Nurse note": "YES",
-    "Pain q 8 hr : ฟอร์มปรอท": "YES",
-    "Pain ≥ 5**": "YES",
-    "Intervention": "Medication",
-    "Re-assessment": "YES",
-    "Operation Surgery": "NO",
-    "Pain post-op แรกรับ : ฟอร์มปรอท": "NO",
-    "Pain post-op แรกรับ : Nurse Note": "NO",
-    "Guideline Post-op": "NO",
-    "หมายเหตุ": "ปวดเสียดแน่นลิ้นปี่แรกรับ ให้ Morphine 3mg IV ตามคำสั่งแพทย์"
   }
 ];
+
+/**
+ * Smart Field Normalizer: ดึงค่าจาก Object แม้ชื่อหัวคอลัมน์ใน Google Sheet จะมีเว้นวรรคหรือเขียนต่างกัน
+ */
+function getSmartField(item, possibleKeys, fallback = "") {
+  if (!item || typeof item !== "object") return fallback;
+  
+  // 1. Direct match
+  for (const k of possibleKeys) {
+    if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== "") {
+      return String(item[k]).trim();
+    }
+  }
+  
+  // 2. Fuzzy match (ตัดช่องว่าง, โคลอน, สัญลักษณ์ และเทียบ case-insensitive)
+  const itemEntries = Object.entries(item);
+  for (const pattern of possibleKeys) {
+    const cleanPattern = pattern.replace(/[\s:_\-–—*()]/g, "").toLowerCase();
+    for (const [rawKey, val] of itemEntries) {
+      if (val === undefined || val === null || String(val).trim() === "") continue;
+      const cleanRaw = rawKey.replace(/[\s:_\-–—*()]/g, "").toLowerCase();
+      if (cleanRaw === cleanPattern || cleanRaw.includes(cleanPattern)) {
+        return String(val).trim();
+      }
+    }
+  }
+  
+  return fallback;
+}
+
+/**
+ * แปลงข้อมูลแถวจาก Google Sheet ให้อยู่ในรูปแบบมาตรฐานของระบบ
+ */
+function normalizeRecord(item) {
+  if (!item || typeof item !== "object") return {};
+  
+  const datetime = getSmartField(item, [
+    "วันที่และเวลา", "วันและเวลา", "วัน/เวลา", "วันที่", "Timestamp", "Date", "DateTime", "Date/Time", "Date Time", "เวลา"
+  ], "");
+  
+  const recorder = getSmartField(item, [
+    "ผู้บันทึก", "ชื่อผู้บันทึก", "พยาบาลผู้บันทึก", "พยาบาล", "ผู้ประเมิน", "Recorder", "Staff", "Nurse", "ชื่อ"
+  ], "");
+  
+  const an = getSmartField(item, [
+    "AN", "เลข AN", "Admission Number", "HN", "เลขที่ผู้ป่วย"
+  ], "");
+  
+  const ward = getSmartField(item, [
+    "หน่วยงาน", "หอผู้ป่วย", "Ward", "ตึก", "แผนก", "Department"
+  ], "");
+  
+  const tool = getSmartField(item, [
+    "Tool", "เครื่องมือ", "Pain Tool", "แบบประเมิน"
+  ], "");
+  
+  const painInitialThermo = getSmartField(item, [
+    "Pain แรกรับ : ฟอร์มปรอท", "Pain แรกรับ ฟอร์มปรอท", "แรกรับ : ฟอร์มปรอท", "แรกรับ ฟอร์มปรอท", "แรกรับปรอท", "Pain แรกรับปรอท", "แรกรับปรอท"
+  ], "-");
+  
+  const painInitialNote = getSmartField(item, [
+    "Pain แรกรับ : Nurse note", "Pain แรกรับ : Nurse Note", "Pain แรกรับ Nurse note", "แรกรับ : Nurse note", "แรกรับ Nurse Note", "แรกรับ note"
+  ], "-");
+  
+  const painQ8Thermo = getSmartField(item, [
+    "Pain q 8 hr : ฟอร์มปรอท", "Pain q 8 hr ฟอร์มปรอท", "Pain q8 hr", "Pain q8", "q 8 hr", "q8hr", "q8 hr : ฟอร์มปรอท", "q8 ฟอร์มปรอท"
+  ], "-");
+  
+  let painOver5 = getSmartField(item, [
+    "Pain ≥ 5**", "Pain ≥ 5", "Pain >= 5", "Pain >= 5**", "Pain>5", "Pain ≥5", "Pain 5", "≥5", ">=5"
+  ], "NO");
+  if (String(painOver5).toUpperCase() === "YES" || painOver5 === "1" || painOver5 === "ใช่") {
+    painOver5 = "YES";
+  } else {
+    painOver5 = "NO";
+  }
+  
+  const intervention = getSmartField(item, [
+    "Intervention", "การจัดการความปวด", "การพยาบาล", "การดูแล"
+  ], "");
+  
+  const reassessment = getSmartField(item, [
+    "Re-assessment", "Reassessment", "Re-assess", "ประเมินซ้ำ", "การประเมินซ้ำ"
+  ], "");
+  
+  let opSurgery = getSmartField(item, [
+    "Operation Surgery", "Operation", "Surgery", "ผ่าตัด", "การผ่าตัด"
+  ], "NO");
+  if (String(opSurgery).toUpperCase() === "YES" || opSurgery === "1" || opSurgery === "ใช่") {
+    opSurgery = "YES";
+  } else {
+    opSurgery = "NO";
+  }
+  
+  const painPostOpThermo = getSmartField(item, [
+    "Pain post-op แรกรับ : ฟอร์มปรอท", "Pain post-op แรกรับ ฟอร์มปรอท", "Post-op แรกรับ : ฟอร์มปรอท", "Post-op ปรอท", "Postop ปรอท"
+  ], "-");
+  
+  const painPostOpNote = getSmartField(item, [
+    "Pain post-op แรกรับ : Nurse Note", "Pain post-op แรกรับ : Nurse note", "Post-op แรกรับ : Nurse Note", "Post-op Note", "Postop Note"
+  ], "-");
+  
+  const guidelinePostOp = getSmartField(item, [
+    "Guideline Post-op", "Guideline post-op", "Guideline", "Post-op Guideline", "แนวทาง Post-op"
+  ], "-");
+  
+  const note = getSmartField(item, [
+    "หมายเหตุ", "Note", "Remarks", "Remark", "รายละเอียดเพิ่มเติม", "Comment"
+  ], "");
+  
+  const recordId = item["Record ID"] || item["recordId"] || ("PID-" + Math.floor(Math.random() * 1000000));
+  
+  return {
+    ...item,
+    "Record ID": recordId,
+    "วันที่และเวลา": datetime,
+    "ผู้บันทึก": recorder,
+    "AN": an,
+    "หน่วยงาน": ward,
+    "Tool": tool,
+    "Pain แรกรับ : ฟอร์มปรอท": painInitialThermo,
+    "Pain แรกรับ : Nurse note": painInitialNote,
+    "Pain q 8 hr : ฟอร์มปรอท": painQ8Thermo,
+    "Pain ≥ 5**": painOver5,
+    "Intervention": intervention,
+    "Re-assessment": reassessment,
+    "Operation Surgery": opSurgery,
+    "Pain post-op แรกรับ : ฟอร์มปรอท": painPostOpThermo,
+    "Pain post-op แรกรับ : Nurse Note": painPostOpNote,
+    "Guideline Post-op": guidelinePostOp,
+    "หมายเหตุ": note
+  };
+}
 
 // App State
 let state = {
@@ -237,7 +294,8 @@ function loadStoredRecords() {
   const localData = localStorage.getItem("painApp_records");
   if (localData) {
     try {
-      state.records = JSON.parse(localData);
+      const parsed = JSON.parse(localData);
+      state.records = Array.isArray(parsed) ? parsed.map(normalizeRecord) : INITIAL_DEMO_RECORDS;
     } catch (e) {
       state.records = INITIAL_DEMO_RECORDS;
     }
@@ -753,7 +811,7 @@ async function fetchFromGoogleSheet(targetSheet = "") {
       }
       
       if (Array.isArray(result.data)) {
-        state.records = result.data;
+        state.records = result.data.map(normalizeRecord);
         saveRecordsToLocal();
         renderKPIs();
         
