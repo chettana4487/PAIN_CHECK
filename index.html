@@ -608,6 +608,27 @@
     </button>
   </nav>
 
+  <!-- Fullscreen Process & Success Animation Modal (ป้องกันการกดแทรกซ้อน และแจ้งผลสวยงาม) -->
+  <div id="appProcessModal" class="process-modal-overlay" style="display:none;" role="dialog" aria-modal="true">
+    <div class="process-modal-card" id="processModalCard">
+      <div class="process-icon-wrap" id="processIconWrap">
+        <div class="process-anim-circle" id="processAnimCircle">
+          <i class="fa-solid fa-cloud-arrow-up" id="processIcon"></i>
+        </div>
+      </div>
+      <h3 class="process-title" id="processTitle">กำลังบันทึกข้อมูล...</h3>
+      <p class="process-message" id="processMessage">กรุณารอสักครู่ ระบบกำลังสื่อสารกับ Google Sheet</p>
+      
+      <div class="process-bar-track" id="processBarTrack">
+        <div class="process-bar-fill" id="processBarFill"></div>
+      </div>
+
+      <button type="button" class="btn-process-close" id="btnProcessClose" style="display:none;">
+        <i class="fa-solid fa-xmark"></i> ปิดหน้าต่าง
+      </button>
+    </div>
+  </div>
+
   <!-- Application Logic -->
   <script src="app.js"></script>
 </body>

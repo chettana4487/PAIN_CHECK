@@ -970,7 +970,7 @@ async function handleFormSubmit(e) {
   saveRecordsToLocal();
   renderKPIs();
   
-  // ปิดปุ่มระหว่างส่งข้อมูล
+  // ปิดปุ่มระหว่างส่งข้อมูล และแสดง Fullscreen Animated Process Modal ป้องกันการกดซ้ำ
   const origBtnText = elements.btnSubmit.innerHTML;
   elements.btnSubmit.disabled = true;
   elements.btnSubmit.innerHTML = isEditing
@@ -978,6 +978,15 @@ async function handleFormSubmit(e) {
     : (isSheetNew 
         ? `<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้างชีตใหม่และบันทึก...` 
         : `<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึกลงชีต...`);
+
+  // แสดง Modal แอนิเมชันล็อกหน้าจอ ป้องกันการกดแทรกซ้อน
+  showProcessModal({
+    type: isEditing ? "updating" : "saving",
+    title: isEditing ? "กำลังอัปเดตข้อมูลเดิม..." : (isSheetNew ? "กำลังสร้างชีตใหม่และบันทึก..." : "กำลังบันทึกลง Google Sheet..."),
+    message: isEditing 
+      ? `กำลังอัปเดตข้อมูล AN ${hn} ในงวด "${targetSheet}"` 
+      : `กำลังบันทึกข้อมูล AN ${hn} ลงในงวด "${targetSheet}"`
+  });
   
   if (state.googleScriptUrl) {
     try {
@@ -1014,23 +1023,39 @@ async function handleFormSubmit(e) {
       });
       
       if (isEditing) {
-        showToast(`อัปเดตแก้ไขข้อมูล AN ${hn} ในชีต "${targetSheet}" เรียบร้อยแล้ว!`, "success");
+        await showProcessSuccess({
+          title: "อัปเดตข้อมูลสำเร็จ!",
+          message: `แก้ไขข้อมูล AN ${hn} ในชีต "${targetSheet}" เรียบร้อยแล้ว`,
+          duration: 1300
+        });
       } else if (isSheetNew && !state.sheets.includes(targetSheet)) {
         state.sheets.unshift(targetSheet);
         localStorage.setItem("painApp_sheets", JSON.stringify(state.sheets));
         populateSheetDropdowns(state.sheets, targetSheet);
-        showToast(`✨ ระบบเพิ่มชีต "${targetSheet}" ใน Google Sheet และบันทึก AN ${hn} สำเร็จ!`, "success");
+        await showProcessSuccess({
+          title: "สร้างชีตและบันทึกสำเร็จ!",
+          message: `เพิ่มชีต "${targetSheet}" และบันทึก AN ${hn} เรียบร้อยแล้ว`,
+          duration: 1400
+        });
       } else {
-        showToast(`บันทึกข้อมูล AN ${hn} ลงชีต "${targetSheet}" เรียบร้อยแล้ว!`, "success");
+        await showProcessSuccess({
+          title: "บันทึกข้อมูลสำเร็จ!",
+          message: `บันทึกข้อมูล AN ${hn} ลงชีต "${targetSheet}" เรียบร้อยแล้ว`,
+          duration: 1300
+        });
       }
       
       // ดึงข้อมูลใหม่อีกครั้ง
       setTimeout(() => {
-        fetchFromGoogleSheet(targetSheet);
+        fetchFromGoogleSheet(targetSheet, true);
       }, 1000);
       
     } catch (err) {
       console.error("Error submitting to Google Sheets:", err);
+      showProcessError({
+        title: "เกิดข้อผิดพลาดในการบันทึก",
+        message: `บันทึกในเครื่องแล้ว แต่การเชื่อมต่อชีตขัดข้อง: ${err.message}`
+      });
       showToast(`บันทึกในเครื่องเรียบร้อยแล้ว (การเชื่อมต่อชีตขัดข้อง: ${err.message})`, "warning");
     } finally {
       elements.btnSubmit.disabled = false;
@@ -1039,13 +1064,17 @@ async function handleFormSubmit(e) {
       resetFormToInitial();
     }
   } else {
-    setTimeout(() => {
+    setTimeout(async () => {
       elements.btnSubmit.disabled = false;
       elements.btnSubmit.innerHTML = origBtnText;
-      showToast(isEditing ? `อัปเดตข้อมูล AN ${hn} สำเร็จ (โหมดออฟไลน์)` : `บันทึกข้อมูล AN ${hn} สำเร็จ (โหมดออฟไลน์)`, "success");
+      await showProcessSuccess({
+        title: isEditing ? "อัปเดตสำเร็จ (โหมดออฟไลน์)" : "บันทึกสำเร็จ (โหมดออฟไลน์)",
+        message: `บันทึกข้อมูล AN ${hn} ในเครื่องเรียบร้อยแล้ว`,
+        duration: 1200
+      });
       // เมื่อบันทึกเสร็จ ให้เคลียร์ช่องรับข้อมูลกลับไปเริ่มต้น เพื่อพร้อมรับข้อมูลใหม่ (ตาม Request 1)
       resetFormToInitial();
-    }, 400);
+    }, 450);
   }
 }
 
@@ -2224,6 +2253,136 @@ function populateSheetDropdowns(sheets, activeSheet = "") {
   updateYearMonthUI(resolved);
 }
 
+// ========================================================
+// Fullscreen Process & Success Feedback Modal Engine
+// ========================================================
+let processModalTimer = null;
+
+/**
+ * แสดง Modal การประมวลผลแบบ Fullscreen พร้อมล็อกหน้าจอกันการกดแทรกซ้อน
+ */
+function showProcessModal({
+  type = "saving", // "saving" | "updating" | "loading"
+  title = "กำลังประมวลผล...",
+  message = "กรุณารอสักครู่ ระบบกำลังสื่อสารกับ Google Sheet"
+} = {}) {
+  if (processModalTimer) {
+    clearTimeout(processModalTimer);
+    processModalTimer = null;
+  }
+  
+  const modal = document.getElementById("appProcessModal");
+  const card = document.getElementById("processModalCard");
+  const animCircle = document.getElementById("processAnimCircle");
+  const icon = document.getElementById("processIcon");
+  const titleEl = document.getElementById("processTitle");
+  const msgEl = document.getElementById("processMessage");
+  const closeBtn = document.getElementById("btnProcessClose");
+  
+  if (!modal) return;
+  
+  modal.classList.remove("proc-closing");
+  if (card) card.classList.remove("is-success", "is-error");
+  if (animCircle) animCircle.className = "process-anim-circle state-loading";
+  
+  if (icon) {
+    if (type === "loading") {
+      icon.className = "fa-solid fa-arrows-rotate";
+    } else if (type === "updating") {
+      icon.className = "fa-solid fa-pen-to-square";
+    } else {
+      icon.className = "fa-solid fa-cloud-arrow-up";
+    }
+  }
+  
+  if (titleEl) titleEl.textContent = title;
+  if (msgEl) msgEl.textContent = message;
+  if (closeBtn) closeBtn.style.display = "none";
+  
+  modal.style.display = "flex";
+}
+
+/**
+ * เปลี่ยนสถานะ Modal เป็นสำเร็จ (Success) พร้อม Animation ติ๊กถูกสีเขียว และปิดตัวลงอัตโนมัติ
+ */
+function showProcessSuccess({
+  title = "บันทึกสำเร็จ!",
+  message = "ข้อมูลถูกบันทึกเรียบร้อยแล้ว",
+  duration = 1300
+} = {}) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("appProcessModal");
+    const card = document.getElementById("processModalCard");
+    const animCircle = document.getElementById("processAnimCircle");
+    const icon = document.getElementById("processIcon");
+    const titleEl = document.getElementById("processTitle");
+    const msgEl = document.getElementById("processMessage");
+    const closeBtn = document.getElementById("btnProcessClose");
+    
+    if (!modal) {
+      resolve();
+      return;
+    }
+    
+    if (card) card.classList.add("is-success");
+    if (animCircle) animCircle.className = "process-anim-circle state-success";
+    if (icon) icon.className = "fa-solid fa-check";
+    
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = message;
+    if (closeBtn) closeBtn.style.display = "none";
+    
+    processModalTimer = setTimeout(() => {
+      hideProcessModal();
+      resolve();
+    }, duration);
+  });
+}
+
+/**
+ * แสดงสถานะข้อผิดพลาดใน Modal พร้อมปุ่มให้ผู้ใช้กดปิด
+ */
+function showProcessError({
+  title = "เกิดข้อผิดพลาด",
+  message = "ไม่สามารถเชื่อมต่อ Google Sheet ได้"
+} = {}) {
+  const modal = document.getElementById("appProcessModal");
+  const card = document.getElementById("processModalCard");
+  const animCircle = document.getElementById("processAnimCircle");
+  const icon = document.getElementById("processIcon");
+  const titleEl = document.getElementById("processTitle");
+  const msgEl = document.getElementById("processMessage");
+  const closeBtn = document.getElementById("btnProcessClose");
+  
+  if (!modal) return;
+  
+  if (card) card.classList.add("is-error");
+  if (animCircle) animCircle.className = "process-anim-circle state-error";
+  if (icon) icon.className = "fa-solid fa-triangle-exclamation";
+  
+  if (titleEl) titleEl.textContent = title;
+  if (msgEl) msgEl.textContent = message;
+  
+  if (closeBtn) {
+    closeBtn.style.display = "inline-flex";
+    closeBtn.onclick = hideProcessModal;
+  }
+}
+
+/**
+ * ปิด Modal การประมวลผลอย่างนุ่มนวล
+ */
+function hideProcessModal() {
+  const modal = document.getElementById("appProcessModal");
+  if (!modal) return;
+  
+  modal.classList.add("proc-closing");
+  setTimeout(() => {
+    modal.style.display = "none";
+    modal.classList.remove("proc-closing");
+  }, 260);
+}
+
 async function fetchSheetList(forceRefresh = false) {
   return fetchFromGoogleSheet(state.currentSheet, !forceRefresh);
 }
@@ -2254,6 +2413,15 @@ async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
   
   state.isOnlineSyncing = true;
   updateSyncStatusBadge();
+
+  // แสดง Animated Modal ล็อกหน้าจอระหว่างโหลด เพื่อป้องกันไม่ให้เห็นข้อมูลเก่าหรือกดแทรกซ้อน (ตาม Request)
+  if (!isInitial) {
+    showProcessModal({
+      type: "loading",
+      title: "กำลังโหลดข้อมูลจากชีต...",
+      message: `กำลังดึงข้อมูลล่าสุดของงวด "${sheetToFetch}" จาก Google Sheet`
+    });
+  }
   
   try {
     let result = null;
@@ -2290,9 +2458,17 @@ async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
         
         if (!isInitial) {
           if (result.isNewSheet) {
-            showToast(`งวด "${state.currentSheet}" ยังไม่มีชีตในระบบ (จะสร้างใหม่อัตโนมัติเมื่อเริ่มบันทึกคนไข้)`, "info");
+            await showProcessSuccess({
+              title: "พร้อมบันทึกงวดใหม่",
+              message: `งวด "${state.currentSheet}" ยังไม่มีชีตในระบบ (จะสร้างใหม่อัตโนมัติเมื่อเริ่มบันทึกคนไข้)`,
+              duration: 1200
+            });
           } else {
-            showToast(`ซิงค์ข้อมูลชีต "${state.currentSheet}" สำเร็จ (${state.records.length} รายการ)`, "success");
+            await showProcessSuccess({
+              title: "โหลดข้อมูลสำเร็จ!",
+              message: `อัปเดตข้อมูลชีต "${state.currentSheet}" เรียบร้อย (${state.records.length} รายการ)`,
+              duration: 900
+            });
           }
         }
       }
@@ -2303,6 +2479,10 @@ async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
   } catch (err) {
     console.warn("Failed to fetch from Google Sheet:", err);
     if (!isInitial) {
+      showProcessError({
+        title: "เชื่อมต่อชีตขัดข้อง",
+        message: `ไม่สามารถดึงข้อมูลล่าสุดได้: ${err.message}`
+      });
       showToast(`เชื่อมต่อชีตไม่ได้: ${err.message}`, "warning");
     }
   } finally {

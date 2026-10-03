@@ -2896,4 +2896,213 @@ body {
   }
 }
 
+/* =========================================================================
+   FULLSCREEN PROCESS & SUCCESS ANIMATION MODAL
+   ========================================================================= */
+.process-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: procFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: all;
+  user-select: none;
+}
+
+.process-modal-overlay.proc-closing {
+  animation: procFadeOut 0.3s ease forwards;
+}
+
+.process-modal-card {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(20px);
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 28px;
+  padding: 34px 28px 28px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.5);
+  animation: procPopIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.process-modal-overlay.proc-closing .process-modal-card {
+  animation: procPopOut 0.25s ease forwards;
+}
+
+.process-icon-wrap {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.process-anim-circle {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 1. Loading/Saving State */
+.process-anim-circle.state-loading {
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4f46e5;
+  box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.15), 0 10px 25px rgba(99, 102, 241, 0.2);
+  animation: procPulse 1.8s infinite ease-in-out;
+}
+
+.process-anim-circle.state-loading i {
+  animation: procRotate 2s linear infinite;
+}
+
+/* 2. Success State */
+.process-anim-circle.state-success {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #16a34a;
+  box-shadow: 0 0 0 10px rgba(34, 197, 94, 0.2), 0 12px 30px rgba(34, 197, 94, 0.25);
+  animation: procBounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* 3. Error State */
+.process-anim-circle.state-error {
+  background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%);
+  color: #e11d48;
+  box-shadow: 0 0 0 8px rgba(225, 29, 72, 0.18);
+  animation: procShake 0.4s ease forwards;
+}
+
+.process-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 8px;
+  letter-spacing: -0.2px;
+}
+
+.process-message {
+  font-size: 0.88rem;
+  color: #475569;
+  line-height: 1.55;
+  margin-bottom: 22px;
+  word-break: break-word;
+}
+
+/* Progress bar flowing animation */
+.process-bar-track {
+  width: 100%;
+  height: 6px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.process-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #4f46e5 0%, #06b6d4 50%, #4f46e5 100%);
+  border-radius: 999px;
+  animation: procProgressFlow 1.6s infinite ease-in-out;
+}
+
+.process-modal-card.is-success .process-bar-track {
+  background: #dcfce7;
+}
+
+.process-modal-card.is-success .process-bar-fill {
+  background: #16a34a;
+  width: 100%;
+  left: 0;
+  animation: none;
+  transition: width 0.3s ease;
+}
+
+.btn-process-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 16px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 14px;
+  transition: var(--transition);
+}
+
+.btn-process-close:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+/* Keyframe Animations */
+@keyframes procFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes procFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes procPopIn {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes procPopOut {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0; }
+}
+
+@keyframes procPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.12); }
+  50% { transform: scale(1.04); box-shadow: 0 0 0 14px rgba(99, 102, 241, 0.22); }
+}
+
+@keyframes procRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes procBounceIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  80% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes procShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+@keyframes procProgressFlow {
+  0% { left: -35%; width: 35%; }
+  50% { left: 25%; width: 55%; }
+  100% { left: 100%; width: 35%; }
+}
+
 
