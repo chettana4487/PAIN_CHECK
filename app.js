@@ -1325,28 +1325,18 @@ function renderCardView(list, container) {
     html += `
       <div class="patient-card ${isSevere ? 'is-severe' : ''} ${isSurgery ? 'is-surgery' : ''}">
         
-        <!-- 1. Header: Avatar + HN + Meta + Quick Action -->
+        <!-- 1. Header: Avatar + AN + Order Pill + Action Button -->
         <div class="p-card-header">
           <div class="p-card-profile">
             <div class="p-avatar ${isSevere ? 'av-severe' : (isSurgery ? 'av-surgery' : 'av-normal')}">
               <i class="fa-solid ${isSevere ? 'fa-heart-crack' : (isSurgery ? 'fa-hospital-user' : 'fa-user-check')}"></i>
             </div>
-            <div class="p-meta">
-              <div class="p-hn-row">
-                <span class="p-hn">AN ${hnDisplay}</span>
-                <button class="p-btn-copy" title="คัดลอก AN" onclick="copyHN('${hnDisplay}')">
-                  <i class="fa-regular fa-copy"></i>
-                </button>
-              </div>
-              <div class="p-sub-meta">
-                <span class="p-sheet-badge"><i class="fa-regular fa-folder-open"></i> ชีต: ${item._sheetName || state.currentSheet}</span>
-                <span class="p-dot">•</span>
-                <span class="p-ward-badge" style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:6px; font-weight:700; font-size:0.75rem;"><i class="fa-solid fa-hospital"></i> ${item["หน่วยงาน"] || "4/2"}</span>
-                <span class="p-dot">•</span>
-                <span class="p-row-idx">ลำดับ #${rowNum}</span>
-                <span class="p-dot">•</span>
-                <span class="p-tool-tag">${toolDisplay}</span>
-              </div>
+            <div class="p-hn-row">
+              <span class="p-hn">AN ${hnDisplay}</span>
+              <button class="p-btn-copy" title="คัดลอก AN" onclick="copyHN('${hnDisplay}')">
+                <i class="fa-regular fa-copy"></i>
+              </button>
+              <span class="p-order-pill">#${rowNum}</span>
             </div>
           </div>
           
@@ -1356,20 +1346,29 @@ function renderCardView(list, container) {
           </button>
         </div>
 
-        <!-- 2. Status Badges Row -->
-        <div class="p-status-strip">
+        <!-- 2. Badges Strip: หน่วยงาน, งวดชีต, เครื่องมือ และ สถานะการประเมิน -->
+        <div class="p-badge-strip">
+          <span class="p-meta-pill p-meta-ward">
+            <i class="fa-solid fa-hospital"></i> หน่วยงาน ${item["หน่วยงาน"] || "4/2"}
+          </span>
+          <span class="p-meta-pill p-meta-sheet">
+            <i class="fa-regular fa-folder-open"></i> ${item._sheetName || state.currentSheet}
+          </span>
+          <span class="p-meta-pill p-meta-tool">
+            <i class="fa-solid fa-tag"></i> ${toolDisplay}
+          </span>
           ${isSevere ? `
-            <span class="p-status-pill pill-severe">
-              <i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5 (ปวดรุนแรง)
+            <span class="p-meta-pill pill-severe">
+              <i class="fa-solid fa-triangle-exclamation"></i> Pain ≥ 5
             </span>
           ` : `
-            <span class="p-status-pill pill-ok">
+            <span class="p-meta-pill pill-ok">
               <i class="fa-solid fa-circle-check"></i> Pain &lt; 5 (ปกติ)
             </span>
           `}
           ${isSurgery ? `
-            <span class="p-status-pill pill-surgery">
-              <i class="fa-solid fa-syringe"></i> ผ่าตัด (Surgery)
+            <span class="p-meta-pill pill-surgery">
+              <i class="fa-solid fa-syringe"></i> ผ่าตัด
             </span>
           ` : ''}
         </div>
