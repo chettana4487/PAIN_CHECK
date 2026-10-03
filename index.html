@@ -223,6 +223,21 @@
               </div>
             </div>
 
+            <!-- แถบแสดงสถานะโหมดแก้ไขข้อมูลเดิม (เมื่อกด "บันทึกต่อ") -->
+            <div id="formEditBanner" class="form-edit-banner" style="display:none;">
+              <div class="edit-banner-info">
+                <span class="edit-banner-badge">
+                  <i class="fa-solid fa-pen-to-square"></i> โหมดแก้ไขข้อมูลเดิม
+                </span>
+                <span class="edit-banner-text">
+                  กำลังแก้ไข AN: <strong id="editBannerAN">-</strong> | งวดชีต: <strong id="editBannerSheet">-</strong> <span id="editBannerRowBadge" style="margin-left:4px; font-weight:700; color:#4338ca;">(<span id="editBannerRow">-</span>)</span>
+                </span>
+              </div>
+              <button type="button" class="btn-cancel-edit" id="btnCancelEdit" title="ยกเลิกการแก้ไขและเริ่มบันทึกแถวใหม่">
+                <i class="fa-solid fa-xmark"></i> ยกเลิก / บันทึกแถวใหม่
+              </button>
+            </div>
+
             <form id="painForm" autocomplete="off">
               
               <!-- 1. ข้อมูลผู้ป่วยและเครื่องมือ -->

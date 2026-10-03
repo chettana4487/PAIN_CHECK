@@ -514,15 +514,40 @@ function doPost(e) {
       ];
     }
     
-    // บันทึกต่อท้ายแถวที่มีข้อมูล
-    sheet.appendRow(rowData);
-
-    // ป้องกัน Google Sheets แปลง 5/1 เป็นวันที่ โดยบังคับให้เป็น Plain Text
-    if (hasWard) {
-      try {
-        const lastRowNum = sheet.getLastRow();
-        sheet.getRange(lastRowNum, 1).setNumberFormat("@").setValue("'" + ward);
-      } catch (wErr) {}
+    const action = String(body.action || "").toLowerCase();
+    let targetRow = parseInt(body.rowIndex || body._rowIndex, 10);
+    
+    // หากเป็นการแก้ไข (update) แต่ไม่ได้ส่ง rowIndex หรือแถวไม่ถูกต้อง ให้ค้นหาแถวเดิมของ AN ในชีตนี้
+    if ((action === "update" || targetRow >= 3) && (!targetRow || targetRow < 3 || targetRow > sheet.getLastRow())) {
+      const data = sheet.getDataRange().getValues();
+      const colAnIdx = hasWard ? 1 : 0;
+      for (let r = 2; r < data.length; r++) {
+        if (String(data[r][colAnIdx] || "").trim() === an) {
+          targetRow = r + 1;
+          break;
+        }
+      }
+    }
+    
+    const isEditMode = (action === "update" || (body.rowIndex && targetRow >= 3)) && targetRow >= 3 && targetRow <= sheet.getLastRow();
+    
+    if (isEditMode) {
+      // 1. อัปเดตแถวเดิมที่มีอยู่แล้ว (สำหรับกรณี "บันทึกต่อ")
+      sheet.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
+      if (hasWard) {
+        try {
+          sheet.getRange(targetRow, 1).setNumberFormat("@").setValue("'" + ward);
+        } catch (wErr) {}
+      }
+    } else {
+      // 2. บันทึกต่อท้ายแถวใหม่ตามปกติ
+      sheet.appendRow(rowData);
+      if (hasWard) {
+        try {
+          const lastRowNum = sheet.getLastRow();
+          sheet.getRange(lastRowNum, 1).setNumberFormat("@").setValue("'" + ward);
+        } catch (wErr) {}
+      }
     }
     
     // ล้างแคชของชีตนี้และแคชรายชื่อชีต
@@ -535,11 +560,20 @@ function doPost(e) {
     
     const updatedSheets = getSheetNames(ss);
     
+    let msg = "";
+    if (isEditMode) {
+      msg = `แก้ไขข้อมูล AN ${an} ในชีต "${sheet.getName()}" (แถวที่ ${targetRow}) เรียบร้อยแล้ว`;
+    } else if (isNewSheetCreated) {
+      msg = `สร้างชีตใหม่ "${sheet.getName()}" และบันทึกข้อมูลเรียบร้อยแล้ว`;
+    } else {
+      msg = `บันทึกข้อมูลลงชีต "${sheet.getName()}" เรียบร้อยแล้ว`;
+    }
+    
     return createJsonResponse({
       status: "success",
-      message: isNewSheetCreated 
-        ? `สร้างชีตใหม่ "${sheet.getName()}" และบันทึกข้อมูลเรียบร้อยแล้ว` 
-        : `บันทึกข้อมูลลงชีต "${sheet.getName()}" เรียบร้อยแล้ว`,
+      message: msg,
+      isEdit: isEditMode,
+      rowIndex: isEditMode ? targetRow : sheet.getLastRow(),
       savedSheet: sheet.getName(),
       createdNewSheet: isNewSheetCreated,
       sheets: updatedSheets,

@@ -431,7 +431,8 @@ let state = {
   isSearchingAllMonths: false,
   googleScriptUrl: localStorage.getItem("painApp_scriptUrl") || DEFAULT_SCRIPT_URL,
   currentTab: "form",  // "form" | "history" | "dashboard"
-  isOnlineSyncing: false
+  isOnlineSyncing: false,
+  editingRecord: null   // เก็บ Record ที่กำลังแก้ไข (เมื่อเลือก "บันทึกต่อ")
 };
 
 // DOM Elements Container
@@ -531,6 +532,13 @@ function initDOMElements() {
   elements.painInitialNote = document.getElementById("painInitialNote");
   elements.painQ8Thermo = document.getElementById("painQ8Thermo");
   elements.painQ8Note = document.getElementById("painQ8Note");
+  
+  // Edit Mode Banner Elements
+  elements.formEditBanner = document.getElementById("formEditBanner");
+  elements.editBannerAN = document.getElementById("editBannerAN");
+  elements.editBannerSheet = document.getElementById("editBannerSheet");
+  elements.editBannerRow = document.getElementById("editBannerRow");
+  elements.btnCancelEdit = document.getElementById("btnCancelEdit");
   
   elements.painOver5Select = document.getElementById("painOver5Select");
   elements.groupIntervention = document.getElementById("groupIntervention");
@@ -773,14 +781,17 @@ function bindEvents() {
   
   if (elements.painForm) {
     elements.painForm.addEventListener("submit", handleFormSubmit);
-    elements.painForm.addEventListener("reset", () => {
-      setTimeout(() => {
-        if (elements.selectWard) elements.selectWard.value = WARDS[0];
-        if (elements.selectTool) elements.selectTool.value = TOOLS[0];
-        updatePainConditionUI();
-        updateSurgeryConditionUI();
-        if (elements.formTargetSheet) elements.formTargetSheet.value = state.currentSheet;
-      }, 50);
+    elements.painForm.addEventListener("reset", (e) => {
+      e.preventDefault();
+      resetFormToInitial();
+    });
+  }
+
+  // Cancel Edit Mode Button
+  if (elements.btnCancelEdit) {
+    elements.btnCancelEdit.addEventListener("click", () => {
+      resetFormToInitial();
+      showToast("ยกเลิกโหมดแก้ไขแล้ว พร้อมบันทึกแถวใหม่", "info");
     });
   }
   
@@ -908,15 +919,21 @@ async function handleFormSubmit(e) {
   const guidelinePostOp = opSurgery === "YES" ? (elements.guidelinePostOp ? elements.guidelinePostOp.value : "YES") : "-";
   const note = (elements.inputRemarks ? elements.inputRemarks.value : "").trim();
   
+  // ตรวจสอบโหมดแก้ไข (Edit Mode) เมื่อเลือก "บันทึกต่อ"
+  const isEditing = Boolean(state.editingRecord);
+  const editingRowIndex = state.editingRecord ? state.editingRecord._rowIndex : null;
+  const editingSheet = state.editingRecord ? state.editingRecord._sheetName : null;
+
   // คำนวณชื่อชีตตามปีและเดือนที่ผู้ใช้เลือก (หากไม่มีชีตจะเพิ่มอัตโนมัติ)
   const resolved = resolveSheetName(state.selectedYear, state.selectedMonth, state.sheets);
-  const targetSheet = resolved.sheetName;
-  const isSheetNew = !resolved.exists;
+  const targetSheet = (isEditing && editingSheet) ? editingSheet : resolved.sheetName;
+  const isSheetNew = !isEditing && !resolved.exists;
   
   const ward = elements.selectWard ? elements.selectWard.value : "4/2";
 
   const newRecord = {
     "_sheetName": targetSheet,
+    "_rowIndex": isEditing ? editingRowIndex : undefined,
     "หน่วยงาน": ward,
     "Ward": ward,
     "HN": hn,
@@ -937,20 +954,37 @@ async function handleFormSubmit(e) {
   };
   
   // บันทึกลงหน่วยความจำชั่วคราว
-  state.records.unshift(newRecord);
+  if (isEditing) {
+    const recIdx = state.records.findIndex(r => 
+      (r._rowIndex && r._rowIndex === editingRowIndex && (r._sheetName === targetSheet || !r._sheetName)) ||
+      (r.AN === hn || r.HN === hn)
+    );
+    if (recIdx !== -1) {
+      state.records[recIdx] = { ...state.records[recIdx], ...newRecord };
+    } else {
+      state.records.unshift(newRecord);
+    }
+  } else {
+    state.records.unshift(newRecord);
+  }
   saveRecordsToLocal();
   renderKPIs();
   
   // ปิดปุ่มระหว่างส่งข้อมูล
   const origBtnText = elements.btnSubmit.innerHTML;
   elements.btnSubmit.disabled = true;
-  elements.btnSubmit.innerHTML = isSheetNew 
-    ? `<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้างชีตใหม่และบันทึก...` 
-    : `<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึกลงชีต...`;
+  elements.btnSubmit.innerHTML = isEditing
+    ? `<i class="fa-solid fa-spinner fa-spin"></i> กำลังอัปเดตการแก้ไขในชีต...`
+    : (isSheetNew 
+        ? `<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้างชีตใหม่และบันทึก...` 
+        : `<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึกลงชีต...`);
   
   if (state.googleScriptUrl) {
     try {
       const payload = {
+        action: isEditing ? "update" : "append",
+        rowIndex: editingRowIndex || null,
+        _rowIndex: editingRowIndex || null,
         sheetName: targetSheet,
         "หน่วยงาน": ward,
         ward: ward,
@@ -979,8 +1013,9 @@ async function handleFormSubmit(e) {
         body: JSON.stringify(payload)
       });
       
-      // หากเป็นชีตที่ยังไม่มีในรายการ ให้เพิ่มเข้าใน state.sheets อัตโนมัติทันที
-      if (isSheetNew && !state.sheets.includes(targetSheet)) {
+      if (isEditing) {
+        showToast(`อัปเดตแก้ไขข้อมูล AN ${hn} ในชีต "${targetSheet}" เรียบร้อยแล้ว!`, "success");
+      } else if (isSheetNew && !state.sheets.includes(targetSheet)) {
         state.sheets.unshift(targetSheet);
         localStorage.setItem("painApp_sheets", JSON.stringify(state.sheets));
         populateSheetDropdowns(state.sheets, targetSheet);
@@ -1000,19 +1035,18 @@ async function handleFormSubmit(e) {
     } finally {
       elements.btnSubmit.disabled = false;
       elements.btnSubmit.innerHTML = origBtnText;
+      // เมื่อบันทึกเสร็จ ให้เคลียร์ช่องรับข้อมูลกลับไปเริ่มต้น เพื่อพร้อมรับข้อมูลใหม่ (ตาม Request 1)
+      resetFormToInitial();
     }
   } else {
     setTimeout(() => {
       elements.btnSubmit.disabled = false;
       elements.btnSubmit.innerHTML = origBtnText;
-      showToast(`บันทึกข้อมูล HN ${hn} สำเร็จ (โหมดออฟไลน์)`, "success");
+      showToast(isEditing ? `อัปเดตข้อมูล AN ${hn} สำเร็จ (โหมดออฟไลน์)` : `บันทึกข้อมูล AN ${hn} สำเร็จ (โหมดออฟไลน์)`, "success");
+      // เมื่อบันทึกเสร็จ ให้เคลียร์ช่องรับข้อมูลกลับไปเริ่มต้น เพื่อพร้อมรับข้อมูลใหม่ (ตาม Request 1)
+      resetFormToInitial();
     }, 400);
   }
-  
-  // ล้างฟอร์มบางส่วนเพื่อพร้อมบันทึกรายถัดไป
-  elements.inputAN.value = "";
-  if (elements.inputRemarks) elements.inputRemarks.value = "";
-  elements.inputAN.focus();
 }
 
 /**
@@ -1632,23 +1666,156 @@ function updateFilterChipCounts() {
 }
 
 /**
- * เติมข้อมูล HN ในฟอร์มเพื่อบันทึกแถวใหม่
+ * ยกเลิกโหมดแก้ไข และคืนค่าปุ่ม/แบนเนอร์กลับสู่สภาวะปกติ
+ */
+function clearEditMode() {
+  state.editingRecord = null;
+  if (elements.formEditBanner) {
+    elements.formEditBanner.style.display = "none";
+  }
+  if (elements.btnSubmit) {
+    elements.btnSubmit.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูลลง Google Sheet`;
+    elements.btnSubmit.classList.remove("btn-edit-mode");
+  }
+}
+
+/**
+ * เคลียร์ฟอร์มกลับไปสู่ค่าเริ่มต้น เพื่อพร้อมรับข้อมูลใหม่ (ตาม Request 1)
+ */
+function resetFormToInitial() {
+  if (elements.painForm) {
+    elements.painForm.reset();
+  }
+  
+  if (elements.selectWard) elements.selectWard.value = WARDS[0] || "4/2";
+  if (elements.inputAN) elements.inputAN.value = "";
+  if (elements.selectTool) elements.selectTool.value = TOOLS[0] || "Numeric Rating Score";
+  
+  if (elements.painInitialThermo) elements.painInitialThermo.value = "YES";
+  if (elements.painInitialNote) elements.painInitialNote.value = "YES";
+  if (elements.painQ8Thermo) elements.painQ8Thermo.value = "YES";
+  if (elements.painQ8Note) elements.painQ8Note.value = "YES";
+  
+  if (elements.painOver5Select) elements.painOver5Select.value = "NO";
+  if (elements.selectIntervention) elements.selectIntervention.value = "";
+  if (elements.selectReassessment) elements.selectReassessment.value = "";
+  
+  if (elements.selectSurgery) elements.selectSurgery.value = "NO";
+  if (elements.painPostOpThermo) elements.painPostOpThermo.value = "YES";
+  if (elements.painPostOpNote) elements.painPostOpNote.value = "YES";
+  if (elements.guidelinePostOp) elements.guidelinePostOp.value = "YES";
+  
+  if (elements.inputRemarks) elements.inputRemarks.value = "";
+  
+  clearEditMode();
+  updatePainConditionUI();
+  updateSurgeryConditionUI();
+}
+
+/**
+ * เติมข้อมูลในฟอร์มเพื่อแก้ไขข้อมูลเดิม (เมื่อกด "บันทึกต่อ" ตาม Request 2)
  */
 window.fillFormForAN = function(hn, latestRecord = null) {
   switchTab("form");
-  elements.inputAN.value = hn;
   
   if (latestRecord) {
-    if (latestRecord["หน่วยงาน"] && elements.selectWard) elements.selectWard.value = latestRecord["หน่วยงาน"];
-    if (latestRecord["Tool"] && elements.selectTool) elements.selectTool.value = latestRecord["Tool"];
-    if (latestRecord["Operation Surgery"] && elements.selectSurgery) elements.selectSurgery.value = latestRecord["Operation Surgery"];
+    state.editingRecord = latestRecord;
+    
+    // 1. หน่วยงาน
+    const wardVal = normalizeWardValue(latestRecord["หน่วยงาน"] || latestRecord["Ward"]);
+    if (elements.selectWard) elements.selectWard.value = wardVal;
+    
+    // 2. AN
+    if (elements.inputAN) elements.inputAN.value = hn || latestRecord["AN"] || latestRecord["HN"] || "";
+    
+    // 3. Tool
+    if (elements.selectTool && latestRecord["Tool"]) elements.selectTool.value = latestRecord["Tool"];
+    
+    // 4. Pain แรกรับ
+    if (elements.painInitialThermo) {
+      elements.painInitialThermo.value = String(latestRecord["Pain แรกรับ : ฟอร์มปรอท"] || "").toUpperCase() === "NO" ? "NO" : "YES";
+    }
+    if (elements.painInitialNote) {
+      elements.painInitialNote.value = String(latestRecord["Pain แรกรับ : Nurse note"] || latestRecord["Pain แรกรับ : Nurse Note"] || "").toUpperCase() === "NO" ? "NO" : "YES";
+    }
+    
+    // 5. Pain q 8 hr
+    if (elements.painQ8Thermo) {
+      elements.painQ8Thermo.value = String(latestRecord["Pain q 8 hr : ฟอร์มปรอท"] || "").toUpperCase() === "NO" ? "NO" : "YES";
+    }
+    if (elements.painQ8Note) {
+      elements.painQ8Note.value = String(latestRecord["Pain q 8 hr : Nurse Note"] || latestRecord["Pain q 8 hr : Nurse note"] || "").toUpperCase() === "NO" ? "NO" : "YES";
+    }
+    
+    // 6. Pain >= 5
+    const isSevere = String(latestRecord["Pain ≥ 5**"] || "").toUpperCase() === "YES";
+    if (elements.painOver5Select) elements.painOver5Select.value = isSevere ? "YES" : "NO";
+    
+    if (elements.selectIntervention) {
+      const inv = latestRecord["Intervention"];
+      elements.selectIntervention.value = (inv && inv !== "-") ? inv : "";
+    }
+    if (elements.selectReassessment) {
+      const reass = latestRecord["Re-assessment"];
+      elements.selectReassessment.value = (reass && reass !== "-") ? reass : "";
+    }
+    
+    // 7. ผ่าตัด
+    const isSurgery = String(latestRecord["Operation Surgery"] || "").toUpperCase() === "YES";
+    if (elements.selectSurgery) elements.selectSurgery.value = isSurgery ? "YES" : "NO";
+    
+    if (elements.painPostOpThermo) {
+      elements.painPostOpThermo.value = String(latestRecord["Pain post-op แรกรับ : ฟอร์มปรอท"] || "").toUpperCase() === "NO" ? "NO" : "YES";
+    }
+    if (elements.painPostOpNote) {
+      elements.painPostOpNote.value = String(latestRecord["Pain post-op แรกรับ : Nurse Note"] || latestRecord["Pain post-op แรกรับ : Nurse note"] || "").toUpperCase() === "NO" ? "NO" : "YES";
+    }
+    if (elements.guidelinePostOp) {
+      elements.guidelinePostOp.value = String(latestRecord["Guideline Post-op"] || "").toUpperCase() === "NO" ? "NO" : "YES";
+    }
+    
+    // 8. หมายเหตุ
+    if (elements.inputRemarks) {
+      elements.inputRemarks.value = latestRecord["หมายเหตุ"] || "";
+    }
+    
+    // 9. เลือกปีและเดือนให้ตรงกับชีตของ Record นี้
+    const sheetName = latestRecord._sheetName || state.currentSheet;
+    if (sheetName) {
+      const ym = parseSheetYearMonth(sheetName);
+      if (ym) {
+        state.selectedYear = ym.year;
+        state.selectedMonth = ym.month.no;
+        if (elements.formSelectYear) elements.formSelectYear.value = ym.year;
+        if (elements.formSelectMonth) elements.formSelectMonth.value = ym.month.no;
+        updateTargetSheetUI();
+      }
+    }
+
+    // แสดง Banner แจ้งเตือนโหมดแก้ไข
+    if (elements.formEditBanner) {
+      if (elements.editBannerAN) elements.editBannerAN.textContent = hn || latestRecord["AN"] || "";
+      if (elements.editBannerSheet) elements.editBannerSheet.textContent = sheetName || "-";
+      if (elements.editBannerRow) elements.editBannerRow.textContent = latestRecord._rowIndex ? `แถวที่ ${latestRecord._rowIndex}` : "ล่าสุด";
+      elements.formEditBanner.style.display = "flex";
+    }
+    
+    if (elements.btnSubmit) {
+      elements.btnSubmit.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> บันทึกการแก้ไขข้อมูลเดิม`;
+      elements.btnSubmit.classList.add("btn-edit-mode");
+    }
+    
+    showToast(`ดึงข้อมูล AN ${hn} เข้าฟอร์มแล้ว (โหมดแก้ไขข้อมูลเดิม)`, "info");
+  } else {
+    clearEditMode();
+    if (elements.inputAN) elements.inputAN.value = hn || "";
   }
   
   updatePainConditionUI();
   updateSurgeryConditionUI();
   
-  document.getElementById("panelForm").scrollIntoView({ behavior: "smooth" });
-  showToast(`ระบบเตรียมฟอร์มสำหรับ HN ${hn} แล้ว`, "success");
+  const formCard = document.querySelector(".form-card");
+  if (formCard) formCard.scrollIntoView({ behavior: "smooth" });
 };
 
 window.copyHN = function(hn) {
