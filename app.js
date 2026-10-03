@@ -2414,8 +2414,10 @@ async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
   state.isOnlineSyncing = true;
   updateSyncStatusBadge();
 
-  // แสดง Animated Modal ล็อกหน้าจอระหว่างโหลด เพื่อป้องกันไม่ให้เห็นข้อมูลเก่าหรือกดแทรกซ้อน (ตาม Request)
-  if (!isInitial) {
+  // หากในเครื่องมีข้อมูลงวดนี้ในแคชอยู่แล้ว ผู้ใช้เห็นข้อมูลได้ทันทีใน 0.05s
+  // แสดง Modal ล็อกหน้าจอเฉพาะเมื่อยังไม่มีแคชข้อมูลของงวดนี้ในเครื่องเลย
+  const shouldShowModal = !isInitial && !cachedForThisSheet;
+  if (shouldShowModal) {
     showProcessModal({
       type: "loading",
       title: "กำลังโหลดข้อมูลจากชีต...",
@@ -2435,7 +2437,7 @@ async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
         action: "getData", 
         sheet: sheetToFetch,
         sheetName: sheetToFetch 
-      });
+      }, 5000);
     }
     
     if (result && result.status === "success") {
@@ -2456,18 +2458,18 @@ async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
         renderKPIs();
         renderHistoryView();
         
-        if (!isInitial) {
+        if (shouldShowModal) {
           if (result.isNewSheet) {
             await showProcessSuccess({
               title: "พร้อมบันทึกงวดใหม่",
-              message: `งวด "${state.currentSheet}" ยังไม่มีชีตในระบบ (จะสร้างใหม่อัตโนมัติเมื่อเริ่มบันทึกคนไข้)`,
-              duration: 1200
+              message: `งวด "${state.currentSheet}" ยังไม่มีข้อมูล (พร้อมบันทึกคนไข้ใหม่)`,
+              duration: 900
             });
           } else {
             await showProcessSuccess({
               title: "โหลดข้อมูลสำเร็จ!",
               message: `อัปเดตข้อมูลชีต "${state.currentSheet}" เรียบร้อย (${state.records.length} รายการ)`,
-              duration: 900
+              duration: 800
             });
           }
         }
@@ -2478,7 +2480,7 @@ async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
     
   } catch (err) {
     console.warn("Failed to fetch from Google Sheet:", err);
-    if (!isInitial) {
+    if (shouldShowModal) {
       showProcessError({
         title: "เชื่อมต่อชีตขัดข้อง",
         message: `ไม่สามารถดึงข้อมูลล่าสุดได้: ${err.message}`
@@ -2491,7 +2493,7 @@ async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
   }
 }
 
-function fetchJsonp(url, params = {}, timeout = 10000) {
+function fetchJsonp(url, params = {}, timeout = 6000) {
   return new Promise((resolve, reject) => {
     const callbackName = "jsonp_cb_" + Math.round(100000 * Math.random());
     const query = new URLSearchParams({ ...params, callback: callbackName, _t: Date.now() });

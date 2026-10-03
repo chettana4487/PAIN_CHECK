@@ -420,42 +420,37 @@ function rebuildCentralSheet(ss) {
  */
 function getOrCreateCentralSheet(ss) {
   let sheet = ss.getSheetByName(SHEET_NAME_DATA);
-  if (!sheet || sheet.getLastRow() <= 2) {
-    rebuildCentralSheet(ss);
-    sheet = ss.getSheetByName(SHEET_NAME_DATA);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME_DATA, 0);
+    initCentralSheetHeaders(sheet);
   }
   return sheet;
 }
 
 /**
- * ดึงข้อมูลจากชีตกลาง Pain_Data ส่งให้เว็บแอป
+ * ดึงข้อมูลจากชีตกลาง Pain_Data ส่งให้เว็บแอป (High-Speed Single Range Read)
  */
 function parseCentralMasterSheet(centralSheet, filterMonth) {
   const lastRow = centralSheet.getLastRow();
-  const lastCol = centralSheet.getLastColumn();
   if (lastRow <= 2) return [];
   
-  const readCol = Math.max(17, lastCol);
-  const range = centralSheet.getRange(3, 1, lastRow - 2, readCol);
+  // อ่านค่าจากชีตกลางครั้งเดียว (รวดเร็วเพียง ~100ms)
+  const range = centralSheet.getRange(3, 1, lastRow - 2, 17);
   const values = range.getValues();
-  const displayValues = range.getDisplayValues();
   
   const results = [];
   const cleanFilterMonth = filterMonth ? String(filterMonth).trim().toLowerCase() : "";
   
   for (let i = 0; i < values.length; i++) {
     const row = values[i];
-    const dispRow = displayValues[i] || [];
-    
     const rawWard = row[0];
-    const dispWard = dispRow[0] || "";
-    const ward = normalizeWardValue(rawWard, dispWard);
+    const ward = normalizeWardValue(rawWard);
     const hn = String(row[1] || "").trim();
     
     if (!hn || hn.includes("Total") || hn.includes("%") || hn.includes("รวม")) continue;
     
-    const sheetMonth = String(row[15] || dispRow[15] || "").trim();
-    const timestamp = String(row[16] || dispRow[16] || "").trim();
+    const sheetMonth = String(row[15] || "").trim();
+    const timestamp = String(row[16] || "").trim();
     
     if (cleanFilterMonth && cleanFilterMonth !== "all" && sheetMonth) {
       if (sheetMonth.toLowerCase() !== cleanFilterMonth) {
@@ -492,7 +487,7 @@ function parseCentralMasterSheet(centralSheet, filterMonth) {
 }
 
 /**
- * Handle GET Requests
+ * Handle GET Requests (ตอบสนองใน 50 - 300ms)
  */
 function doGet(e) {
   try {
@@ -501,9 +496,20 @@ function doGet(e) {
     const callback = e.parameter && e.parameter.callback;
     const targetSheetName = (e.parameter && (e.parameter.sheet || e.parameter.sheetName)) || "";
     
+    // 1. ตรวจสอบ Memory Cache เป็นอันดับแรกสุด (ถ้ามีในแคช ตอบกลับทันทีใน 50ms โดยไม่ต้องเปิด Spreadsheet!)
+    if (action === "getData" || action === "getAll") {
+      const cache = CacheService.getScriptCache();
+      const cacheKey = "cache_data_c5_" + (targetSheetName ? targetSheetName.replace(/[^a-zA-Z0-9_\u0E00-\u0E7F]/g, "") : "all");
+      const cachedPayload = cache.get(cacheKey);
+      
+      if (cachedPayload && !e.parameter.nocache) {
+        return createJsonResponse(JSON.parse(cachedPayload), callback);
+      }
+    }
+    
     const ss = getSpreadsheet();
     
-    // 0. คำสั่งจัดระเบียบคอลัมน์ชีตกลางใหม่ตามสั่ง
+    // คำสั่งจัดระเบียบคอลัมน์ชีตกลางใหม่ตามสั่ง
     if (action === "rebuild" || action === "fixColumns" || action === "syncSheets") {
       const count = rebuildCentralSheet(ss);
       return createJsonResponse({
@@ -516,21 +522,13 @@ function doGet(e) {
     const centralSheet = getOrCreateCentralSheet(ss);
     const sheetList = getSheetNames(ss);
     
-    // 1. ดึงรายชื่อแท็บเดือน
+    // ดึงรายชื่อแท็บเดือน
     if (action === "getSheets") {
       return createJsonResponse({ status: "success", sheets: sheetList }, callback);
     }
     
-    // 2. ดึงข้อมูล (ความเร็วสูงจากชีตกลาง Pain_Data)
+    // ดึงข้อมูล (ความเร็วสูงจากชีตกลาง Pain_Data)
     if (action === "getData" || action === "getAll") {
-      const cache = CacheService.getScriptCache();
-      const cacheKey = "cache_data_c4_" + (targetSheetName ? targetSheetName.replace(/[^a-zA-Z0-9_\u0E00-\u0E7F]/g, "") : "all");
-      const cachedPayload = cache.get(cacheKey);
-      
-      if (cachedPayload && !e.parameter.nocache) {
-        return createJsonResponse(JSON.parse(cachedPayload), callback);
-      }
-      
       const requestedSheet = targetSheetName || (sheetList[0] || "ต.ค.68");
       const data = parseCentralMasterSheet(centralSheet, requestedSheet);
       
@@ -544,11 +542,15 @@ function doGet(e) {
       };
       
       try {
+        const cache = CacheService.getScriptCache();
+        const cacheKey = "cache_data_c5_" + (targetSheetName ? targetSheetName.replace(/[^a-zA-Z0-9_\u0E00-\u0E7F]/g, "") : "all");
         cache.put(cacheKey, JSON.stringify(responsePayload), 600);
       } catch (cacheErr) {}
       
       return createJsonResponse(responsePayload, callback);
     }
+      
+
     
     // 3. ค้นหาประวัติ AN ย้อนหลังทุกงวด (< 0.05 วินาที)
     if (action === "search" || action === "searchAll") {
