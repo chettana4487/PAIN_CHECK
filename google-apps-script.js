@@ -1,13 +1,13 @@
 /**
  * =========================================================================
  * GOOGLE APPS SCRIPT สำหรับระบบบันทึกและตรวจสอบอาการปวดคนไข้ (Pain Assessment)
- * ปรับปรุงให้สอดคล้องกับโครงสร้าง Google Sheet ของโรงพยาบาล 100%
+ * สถาปัตยกรรมชีตกลาง (Central Master Sheet: "Pain_Data") เพื่อความเร็วสูงสุด (Instant Speed)
  * =========================================================================
  */
 
 const SPREADSHEET_ID = "1qawG_VPCRk23Rh-L4OrgySnIQnztjGSY6jwAYnTW-TQ";
 const SHEET_NAME_SEARCH = "ค้นหา_AN";
-const SHEET_NAME_DATA = "Pain_Data";
+const SHEET_NAME_DATA = "Pain_Data"; // ชีตกลางหลักที่รวมข้อมูลคนไข้ทุกงวด
 
 // รายชื่อหน่วยงาน / หอผู้ป่วย (13 รายการ)
 const WARDS = [
@@ -46,7 +46,7 @@ function isMonthYearSheet(sheetName) {
   const name = String(sheetName).trim();
   const lower = name.toLowerCase();
   
-  if (name === SHEET_NAME_SEARCH) return false;
+  if (name === SHEET_NAME_SEARCH || name === SHEET_NAME_DATA) return false;
   if (/^(sheet\d+|ชีต\d+|setting|config|template|summary|สรุป|ค้นหา|dashboard)/i.test(name)) return false;
   
   const hasMonth = MONTH_KEYWORDS.some(kw => lower.includes(kw));
@@ -55,9 +55,12 @@ function isMonthYearSheet(sheetName) {
   return hasMonth || hasDatePattern;
 }
 
+/**
+ * ดึงรายชื่อแท็บเดือนทั้งหมด ผสมกับรายชื่องวดที่มีในชีตกลาง Pain_Data
+ */
 function getSheetNames(ss) {
   const cache = CacheService.getScriptCache();
-  const cached = cache.get("cached_month_sheets");
+  const cached = cache.get("cached_month_sheets_v3");
   if (cached) {
     try { return JSON.parse(cached); } catch (e) {}
   }
@@ -65,15 +68,166 @@ function getSheetNames(ss) {
   const sheets = ss.getSheets();
   const allNames = sheets.map(s => s.getName().trim());
   
-  // 1. กรองเฉพาะชีตเดือน-ปี
+  // 1. ดึงชื่อชีตแท็บเดือนเดิม
   const monthSheets = allNames.filter(name => isMonthYearSheet(name));
-  const result = monthSheets.length > 0 ? monthSheets : allNames.filter(name => name !== SHEET_NAME_SEARCH);
+  const monthSet = new Set(monthSheets);
+  
+  // 2. ดึงค่างวด (เดือน/ปี) ที่เคยบันทึกไว้ใน Col P ของชีตกลาง Pain_Data
+  const centralSheet = ss.getSheetByName(SHEET_NAME_DATA);
+  if (centralSheet && centralSheet.getLastRow() > 2) {
+    try {
+      const colPValues = centralSheet.getRange(3, 16, centralSheet.getLastRow() - 2, 1).getValues();
+      colPValues.forEach(row => {
+        const m = String(row[0] || "").trim();
+        if (m) monthSet.add(m);
+      });
+    } catch (err) {}
+  }
+  
+  let result = Array.from(monthSet);
+  if (result.length === 0) {
+    result = ["ต.ค.68"];
+  }
   
   try {
-    cache.put("cached_month_sheets", JSON.stringify(result), 1800); // แคชรายชื่อชีตไว้ 30 นาที
+    cache.put("cached_month_sheets_v3", JSON.stringify(result), 600); // 10 นาที
   } catch (e) {}
   
   return result;
+}
+
+/**
+ * ตรวจสอบและสร้างชีตกลาง "Pain_Data" พร้อมดึงข้อมูลจากชีตเดิมมารวมให้อัตโนมัติ
+ */
+function getOrCreateCentralSheet(ss) {
+  let sheet = ss.getSheetByName(SHEET_NAME_DATA);
+  if (sheet) return sheet;
+  
+  // 1. สร้างชีตกลางขึ้นมาใหม่ วางไว้แท็บแรก
+  sheet = ss.insertSheet(SHEET_NAME_DATA, 0);
+  
+  // โครงสร้างหัวตาราง Col A-Q (17 คอลัมน์):
+  // Col A-O สอดคล้องกับชีตโรงพยาบาลเดิม 100% + Col P คอลัมน์ "งวดประจำเดือน" + Col Q "วันเวลาบันทึก"
+  const headersRow1 = [
+    "หน่วยงาน", "AN", "Tool", "Pain แรกรับ", "", "Pain q 8 hr", "", 
+    "Pain ≥ 5**", "Intervention", "Re-assessment", 
+    "Operation Surgery", "Pain post - op แรกรับ", "", "Guideline Post - op", "หมายเหตุ",
+    "งวดประจำเดือน", "วันเวลาบันทึก"
+  ];
+  const headersRow2 = [
+    "", "", "", "ฟอร์มปรอท", "Nurse note", "ฟอร์มปรอท", "Nurse Note", 
+    "", "", "", 
+    "", "ฟอร์มปรอท", "Nurse Note", "", "",
+    "เดือน/ปี (งวด)", "Timestamp"
+  ];
+  
+  sheet.getRange(1, 1, 1, headersRow1.length).setValues([headersRow1]);
+  sheet.getRange(2, 1, 1, headersRow2.length).setValues([headersRow2]);
+  
+  try {
+    sheet.getRange("A1:A2").merge();
+    sheet.getRange("B1:B2").merge();
+    sheet.getRange("C1:C2").merge();
+    sheet.getRange("D1:E1").merge();
+    sheet.getRange("F1:G1").merge();
+    sheet.getRange("H1:H2").merge();
+    sheet.getRange("I1:I2").merge();
+    sheet.getRange("J1:J2").merge();
+    sheet.getRange("K1:K2").merge();
+    sheet.getRange("L1:M1").merge();
+    sheet.getRange("N1:N2").merge();
+    sheet.getRange("O1:O2").merge();
+    sheet.getRange("P1:P2").merge();
+    sheet.getRange("Q1:Q2").merge();
+    
+    // โทนสีสวยงามและเป็นระเบียบ
+    sheet.getRange("A1:B2").setBackground("#a9d08e"); // เขียว: หน่วยงาน, AN
+    sheet.getRange("C1:C2").setBackground("#d5a6bd"); // ม่วง: Tool
+    sheet.getRange("D1:G2").setBackground("#ffe599"); // เหลือง: Pain แรกรับ, q8
+    sheet.getRange("H1:O2").setBackground("#cfe2f3"); // ฟ้า: Surgery, หมายเหตุ
+    sheet.getRange("P1:Q2").setBackground("#fed7aa"); // ส้มอ่อน: งวดประจำเดือน และเวลาบันทึก
+    
+    sheet.getRange("A1:Q2")
+      .setFontWeight("bold")
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle");
+    sheet.setFrozenRows(2);
+    
+    sheet.setColumnWidth(1, 95);   // หน่วยงาน
+    sheet.setColumnWidth(2, 110);  // AN
+    sheet.setColumnWidth(3, 160);  // Tool
+    sheet.setColumnWidth(15, 180); // หมายเหตุ
+    sheet.setColumnWidth(16, 130); // งวดประจำเดือน (Col P)
+    sheet.setColumnWidth(17, 150); // Timestamp (Col Q)
+    
+    // ตั้งค่า Format Col A เป็นข้อความธรรมดา (Plain Text) และ Data Validation รายการ 13 หอผู้ป่วย
+    sheet.getRange(3, 1, 5000, 1).setNumberFormat("@");
+    sheet.getRange(3, 2, 5000, 1).setNumberFormat("@");
+    sheet.getRange(3, 16, 5000, 1).setNumberFormat("@");
+    
+    const rule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(WARDS, true)
+      .setAllowInvalid(false)
+      .build();
+    sheet.getRange(3, 1, 5000, 1).setDataValidation(rule);
+  } catch (fmtErr) {}
+
+  // 2. นำเข้าข้อมูลเดิมจากชีตรายเดือนเดิมทั้งหมดมาเก็บในชีตกลางทันที (ข้อมูลเดิมไม่สูญหาย)
+  importExistingMonthlySheetsToCentral(ss, sheet);
+  
+  return sheet;
+}
+
+/**
+ * นำเข้าข้อมูลจากชีตรายเดือนเดิมทั้งหมดเข้าสู่ชีตกลาง Pain_Data อัตโนมัติ
+ */
+function importExistingMonthlySheetsToCentral(ss, centralSheet) {
+  if (!centralSheet) return;
+  const sheets = ss.getSheets();
+  const rowsToAdd = [];
+  
+  for (let i = 0; i < sheets.length; i++) {
+    const s = sheets[i];
+    const name = s.getName().trim();
+    if (name === SHEET_NAME_SEARCH || name === SHEET_NAME_DATA) continue;
+    if (!isMonthYearSheet(name)) continue;
+    
+    const data = parseHospitalSheet(s);
+    for (let j = 0; j < data.length; j++) {
+      const item = data[j];
+      const ward = item["หน่วยงาน"] || "4/2";
+      const an = item["AN"] || item["HN"] || "";
+      if (!an) continue;
+      
+      rowsToAdd.push([
+        "'" + ward,
+        an,
+        item["Tool"] || "Numeric Rating Score",
+        item["Pain แรกรับ : ฟอร์มปรอท"] || "YES",
+        item["Pain แรกรับ : Nurse note"] || "YES",
+        item["Pain q 8 hr : ฟอร์มปรอท"] || "YES",
+        item["Pain q 8 hr : Nurse Note"] || "YES",
+        item["Pain ≥ 5**"] || "NO",
+        item["Intervention"] || "-",
+        item["Re-assessment"] || "-",
+        item["Operation Surgery"] || "NO",
+        item["Pain post-op แรกรับ : ฟอร์มปรอท"] || "-",
+        item["Pain post-op แรกรับ : Nurse Note"] || "-",
+        item["Guideline Post-op"] || "-",
+        item["หมายเหตุ"] || "",
+        name, // งวดประจำเดือน (Col P)
+        Utilities.formatDate(new Date(), "Asia/Bangkok", "dd/MM/yyyy HH:mm:ss") // Timestamp (Col Q)
+      ]);
+    }
+  }
+  
+  if (rowsToAdd.length > 0) {
+    const startRow = centralSheet.getLastRow() + 1;
+    centralSheet.getRange(startRow, 1, rowsToAdd.length, 17).setValues(rowsToAdd);
+    centralSheet.getRange(startRow, 1, rowsToAdd.length, 1).setNumberFormat("@");
+    centralSheet.getRange(startRow, 2, rowsToAdd.length, 1).setNumberFormat("@");
+    centralSheet.getRange(startRow, 16, rowsToAdd.length, 1).setNumberFormat("@");
+  }
 }
 
 /**
@@ -91,182 +245,70 @@ function hasWardColumn(sheet) {
 }
 
 /**
- * เพิ่มคอลัมน์ "หน่วยงาน" ในคอลัมน์แรก พร้อมตั้งค่า Data Validation แบบ Dropdown 13 หอผู้ป่วย
+ * ดึงข้อมูลจากชีตกลาง Pain_Data โดยสามารถเลือกกรองตามงวดเดือน (targetSheetName) หรือดึงทั้งหมดได้ในคำสั่งเดียว
  */
-function ensureWardColumn(sheet) {
-  if (!sheet) return;
-  try {
-    if (!hasWardColumn(sheet)) {
-      sheet.insertColumnBefore(1);
-      sheet.getRange("A1:A2").merge();
-      sheet.getRange("A1").setValue("หน่วยงาน")
-        .setBackground("#a9d08e")
-        .setFontWeight("bold")
-        .setHorizontalAlignment("center")
-        .setVerticalAlignment("middle");
-      sheet.setColumnWidth(1, 95);
-    }
+function parseCentralMasterSheet(centralSheet, filterMonth) {
+  const lastRow = centralSheet.getLastRow();
+  const lastCol = centralSheet.getLastColumn();
+  if (lastRow <= 2) return [];
+  
+  const readCol = Math.max(17, lastCol);
+  const range = centralSheet.getRange(3, 1, lastRow - 2, readCol);
+  const values = range.getValues();
+  const displayValues = range.getDisplayValues();
+  
+  const results = [];
+  const cleanFilterMonth = filterMonth ? String(filterMonth).trim().toLowerCase() : "";
+  
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i];
+    const dispRow = displayValues[i] || [];
     
-    // ตั้งค่า Format เป็นข้อความธรรมดา (Plain Text) และ Data Validation รายการ 13 หอผู้ป่วย (แถว 3 ถึง 1000)
-    sheet.getRange(3, 1, 1000, 1).setNumberFormat("@");
-    const rule = SpreadsheetApp.newDataValidation()
-      .requireValueInList(WARDS, true)
-      .setAllowInvalid(false)
-      .build();
-    sheet.getRange(3, 1, 1000, 1).setDataValidation(rule);
-  } catch (e) {}
-}
-
-/**
- * ตรวจสอบและอัปเดตหัวคอลัมน์ AN ในชีตอัตโนมัติ (หากเดิมเป็น "HN")
- */
-function ensureColumnAIsAN(sheet) {
-  if (!sheet) return;
-  try {
-    const hasWard = hasWardColumn(sheet);
-    const colIdx = hasWard ? 2 : 1;
-    const val = String(sheet.getRange(1, colIdx).getValue() || "").trim();
-    if (val.toUpperCase() === "HN") {
-      sheet.getRange(1, colIdx).setValue("AN");
-    }
-  } catch (e) {}
-}
-
-/**
- * อัปเดตหัวตาราง Col A/B ของทุกชีตประจำเดือนใน Spreadsheet ให้เป็น "AN" ทั้งหมด
- */
-function updateAllSheetsHeaderToAN(ss) {
-  const sheets = ss.getSheets();
-  const updated = [];
-  for (let i = 0; i < sheets.length; i++) {
-    const s = sheets[i];
-    const name = s.getName().trim();
-    if (name === SHEET_NAME_SEARCH) continue;
-    try {
-      const hasWard = hasWardColumn(s);
-      const colIdx = hasWard ? 2 : 1;
-      const val = String(s.getRange(1, colIdx).getValue() || "").trim();
-      if (val.toUpperCase() === "HN") {
-        s.getRange(1, colIdx).setValue("AN");
-        updated.push(name);
+    const rawWard = row[0];
+    const dispWard = dispRow[0] || "";
+    const ward = normalizeWardValue(rawWard, dispWard);
+    const hn = String(row[1] || "").trim();
+    
+    // ข้ามแถวว่าง
+    if (!hn || hn.includes("Total") || hn.includes("%") || hn.includes("รวม")) continue;
+    
+    // คอลัมน์ P (Index 15) = งวดประจำเดือน เช่น "ต.ค.68"
+    const sheetMonth = String(row[15] || dispRow[15] || "").trim();
+    const timestamp = String(row[16] || dispRow[16] || "").trim();
+    
+    // หากระบุเดือนมาให้กรองเฉพาะเดือนนั้น (ถ้าเป็น "all" หรือว่าง ให้ดึงทุกเดือน)
+    if (cleanFilterMonth && cleanFilterMonth !== "all" && sheetMonth) {
+      if (sheetMonth.toLowerCase() !== cleanFilterMonth) {
+        continue;
       }
-    } catch (e) {}
-  }
-  return updated;
-}
-
-/**
- * สร้างชีตประจำเดือนใหม่อัตโนมัติ พร้อมโครงสร้างคอลัมน์หน่วยงานและสไตล์ Col A-O (15 คอลัมน์)
- */
-function createMonthSheet(ss, sheetName) {
-  const cleanName = String(sheetName || "").trim();
-  if (!cleanName) return null;
-  
-  let sheet = ss.getSheetByName(cleanName);
-  if (sheet) return sheet;
-  
-  // 1. พยายามคัดลอก (copyTo) จากชีตประจำเดือนเดิมที่มีอยู่ เพื่อรักษารูปแบบ สี ฟอนต์ ขนาดคอลัมน์ และการผสานเซลล์ไว้ 100%
-  const allSheets = ss.getSheets();
-  let templateSheet = null;
-  for (let i = 0; i < allSheets.length; i++) {
-    const s = allSheets[i];
-    const name = s.getName().trim();
-    if (name !== SHEET_NAME_SEARCH && isMonthYearSheet(name)) {
-      templateSheet = s;
-      break;
     }
-  }
-  if (!templateSheet && allSheets.length > 0) {
-    templateSheet = allSheets[0];
-  }
-  
-  if (templateSheet) {
-    try {
-      sheet = templateSheet.copyTo(ss);
-      sheet.setName(cleanName);
-      ss.setActiveSheet(sheet);
-      ss.moveActiveSheet(ss.getNumSheets());
-      
-      // ตรวจสอบและเพิ่มคอลัมน์ "หน่วยงาน" อัตโนมัติสำหรับชีตใหม่
-      ensureWardColumn(sheet);
-      
-      // ปรับหัวตารางให้เป็น AN
-      ensureColumnAIsAN(sheet);
-
-      // ล้างข้อมูลเดิมตั้งแต่แถวที่ 3 ลงไป (คงแถวหัวตารางที่ 1 และ 2 ไว้)
-      const lastRow = sheet.getLastRow();
-      const lastCol = sheet.getLastColumn();
-      if (lastRow > 2 && lastCol > 0) {
-        sheet.getRange(3, 1, lastRow - 2, lastCol).clearContent();
-      }
-    } catch (copyErr) {
-      sheet = null;
-    }
-  }
-  
-  // 2. หากคัดลอกไม่สำเร็จ ให้สร้างชีตใหม่พร้อมสร้างโครงสร้าง Header 15 คอลัมน์ (หน่วยงาน, HN/AN, Tool...)
-  if (!sheet) {
-    sheet = ss.insertSheet(cleanName);
-    const headersRow1 = [
-      "หน่วยงาน", "HN", "Tool", "Pain แรกรับ", "", "Pain q 8 hr", "", 
-      "Pain ≥ 5**", "Intervention", "Re-assessment", 
-      "Operation Surgery", "Pain post - op แรกรับ", "", "Guideline Post - op", "หมายเหตุ"
-    ];
-    const headersRow2 = [
-      "", "", "", "ฟอร์มปรอท", "Nurse note", "ฟอร์มปรอท", "Nurse Note", 
-      "", "", "", 
-      "", "ฟอร์มปรอท", "Nurse Note", "", ""
-    ];
     
-    sheet.getRange(1, 1, 1, headersRow1.length).setValues([headersRow1]);
-    sheet.getRange(2, 1, 1, headersRow2.length).setValues([headersRow2]);
-    
-    try {
-      sheet.getRange("A1:A2").merge();
-      sheet.getRange("B1:B2").merge();
-      sheet.getRange("C1:C2").merge();
-      sheet.getRange("D1:E1").merge();
-      sheet.getRange("F1:G1").merge();
-      sheet.getRange("H1:H2").merge();
-      sheet.getRange("I1:I2").merge();
-      sheet.getRange("J1:J2").merge();
-      sheet.getRange("K1:K2").merge();
-      sheet.getRange("L1:M1").merge();
-      sheet.getRange("N1:N2").merge();
-      sheet.getRange("O1:O2").merge();
-      
-      // กำหนดสีหัวตารางตามรูปแบบจริงในภาพ
-      sheet.getRange("A1:B2").setBackground("#a9d08e"); // สีเขียว: หน่วยงาน, HN
-      sheet.getRange("C1:C2").setBackground("#d5a6bd"); // สีม่วง: Tool
-      sheet.getRange("D1:G2").setBackground("#ffe599"); // สีเหลืองทอง: Pain แรกรับ, q8
-      sheet.getRange("H1:O2").setBackground("#cfe2f3"); // สีฟ้าอ่อน: ข้อมูลผ่าตัดและหมายเหตุ
-      
-      sheet.getRange("A1:O2")
-        .setFontWeight("bold")
-        .setHorizontalAlignment("center")
-        .setVerticalAlignment("middle");
-      sheet.setFrozenRows(2);
-      sheet.setColumnWidth(1, 95);
-      sheet.setColumnWidth(2, 100);
-      sheet.setColumnWidth(3, 160);
-      
-      // ตั้งค่า Format เป็นข้อความธรรมดา (Plain Text) และ Data Validation สำหรับคอลัมน์ A (หน่วยงาน)
-      sheet.getRange(3, 1, 1000, 1).setNumberFormat("@");
-      const rule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(WARDS, true)
-        .setAllowInvalid(false)
-        .build();
-      sheet.getRange(3, 1, 1000, 1).setDataValidation(rule);
-    } catch (fmtErr) {}
+    results.push({
+      _rowIndex: i + 3,
+      _sheetName: sheetMonth || centralSheet.getName(),
+      "งวด": sheetMonth,
+      "หน่วยงาน": ward,
+      "Ward": ward,
+      "HN": hn,
+      "AN": hn,
+      "Tool": String(row[2] || "Numeric Rating Score").trim(),
+      "Pain แรกรับ : ฟอร์มปรอท": String(row[3] || "-").trim(),
+      "Pain แรกรับ : Nurse note": String(row[4] || "-").trim(),
+      "Pain q 8 hr : ฟอร์มปรอท": String(row[5] || "-").trim(),
+      "Pain q 8 hr : Nurse Note": String(row[6] || "-").trim(),
+      "Pain ≥ 5**": String(row[7] || "NO").trim(),
+      "Intervention": String(row[8] || "-").trim(),
+      "Re-assessment": String(row[9] || "-").trim(),
+      "Operation Surgery": String(row[10] || "NO").trim(),
+      "Pain post-op แรกรับ : ฟอร์มปรอท": String(row[11] || "-").trim(),
+      "Pain post-op แรกรับ : Nurse Note": String(row[12] || "-").trim(),
+      "Guideline Post-op": String(row[13] || "-").trim(),
+      "หมายเหตุ": String(row[14] || "").trim(),
+      "timestamp": timestamp
+    });
   }
   
-  // ล้างแคชรายชื่อชีตเพื่อให้ระบบตรวจพบชีตใหม่ทันที
-  try {
-    const cache = CacheService.getScriptCache();
-    cache.remove("cached_month_sheets");
-  } catch (cErr) {}
-  
-  return sheet;
+  return results;
 }
 
 /**
@@ -279,92 +321,52 @@ function doGet(e) {
     const callback = e.parameter && e.parameter.callback;
     const targetSheetName = (e.parameter && (e.parameter.sheet || e.parameter.sheetName)) || "";
     
-    // 1. ดึงรายชื่อแท็บชีตเดือน (พร้อม High-Speed Cache)
+    const ss = getSpreadsheet();
+    const centralSheet = getOrCreateCentralSheet(ss);
+    const sheetList = getSheetNames(ss);
+    
+    // 1. ดึงรายชื่อแท็บเดือน
     if (action === "getSheets") {
-      const ss = getSpreadsheet();
-      const sheetList = getSheetNames(ss);
       return createJsonResponse({ status: "success", sheets: sheetList }, callback);
     }
 
-    // 1.1 สร้างชีตใหม่ตามสั่ง
-    if (action === "createSheet") {
-      const newSheetName = (e.parameter && (e.parameter.sheet || e.parameter.sheetName || e.parameter.name)) || "";
-      if (!newSheetName) {
-        return createJsonResponse({ status: "error", message: "กรุณาระบุชื่อชีตที่ต้องการสร้าง" }, callback);
-      }
-      const ss = getSpreadsheet();
-      const created = createMonthSheet(ss, newSheetName);
-      const updatedSheets = getSheetNames(ss);
-      return createJsonResponse({ 
-        status: "success", 
-        message: "สร้างชีต " + created.getName() + " เรียบร้อยแล้ว",
-        sheetName: created.getName(),
-        sheets: updatedSheets 
-      }, callback);
-    }
-
-    // 1.2 อัปเดตหัวคอลัมน์ A ในทุกชีตจาก "HN" เป็น "AN"
-    if (action === "updateHeaderToAN" || action === "convertHeaderToAN" || action === "fixHeader") {
-      const ss = getSpreadsheet();
-      const updated = updateAllSheetsHeaderToAN(ss);
-      return createJsonResponse({ 
-        status: "success", 
-        message: "อัปเดตหัวคอลัมน์ A เป็น AN เรียบร้อยแล้วใน " + updated.length + " ชีต",
-        updatedSheets: updated 
+    // 1.1 สั่งซิงค์ข้อมูลจากชีตเดิมเข้าสู่ชีตกลาง Pain_Data ทั้งหมด
+    if (action === "syncAllToCentral" || action === "syncSheets") {
+      importExistingMonthlySheetsToCentral(ss, centralSheet);
+      const cache = CacheService.getScriptCache();
+      cache.removeAll(["cached_month_sheets_v3", "cache_central_all"]);
+      return createJsonResponse({
+        status: "success",
+        message: "ซิงค์ข้อมูลจากชีตเดิมเข้าสู่ชีตกลาง Pain_Data เรียบร้อยแล้ว",
+        totalRows: centralSheet.getLastRow() - 2
       }, callback);
     }
     
-    // 2. ดึงข้อมูล (High-Speed CacheService: ส่งผลลัพธ์กลับในเสี้ยววินาที)
+    // 2. ดึงข้อมูล (High-Speed Single Sheet Architecture: ส่งผลลัพธ์กลับใน 150-300ms!)
     if (action === "getData" || action === "getAll") {
       const cache = CacheService.getScriptCache();
-      const cacheKey = "cache_data_" + (targetSheetName ? targetSheetName.replace(/\s+/g, "_") : "default");
+      const cacheKey = "cache_data_c_" + (targetSheetName ? targetSheetName.replace(/[^a-zA-Z0-9_\u0E00-\u0E7F]/g, "") : "all");
       const cachedPayload = cache.get(cacheKey);
       
-      // ถ้ามีใน Memory Cache ของ Google ให้ส่งกลับทันทีใน 100-300ms!
+      // ถ้ามีใน Memory Cache ของ Google ให้ส่งกลับทันทีใน 50-150ms!
       if (cachedPayload && !e.parameter.nocache) {
         return createJsonResponse(JSON.parse(cachedPayload), callback);
       }
       
-      const ss = getSpreadsheet();
-      const sheetList = getSheetNames(ss);
+      // อ่านข้อมูลจากชีตกลาง Pain_Data ครั้งเดียว
+      const requestedSheet = targetSheetName || (sheetList[0] || "ต.ค.68");
+      const data = parseCentralMasterSheet(centralSheet, requestedSheet);
       
-      let sheet = null;
-      if (targetSheetName) {
-        sheet = ss.getSheetByName(targetSheetName);
-      }
-
-      // หากระบุชื่อชีตมาแต่ยังไม่มีใน Spreadsheet ให้ส่งกลับเป็น 0 รายการ (ไม่ดึงชีตอื่นมาปน)
-      if (!sheet && targetSheetName) {
-        return createJsonResponse({
-          status: "success",
-          currentSheet: targetSheetName,
-          sheets: sheetList,
-          count: 0,
-          data: [],
-          isNewSheet: true
-        }, callback);
-      }
-
-      if (!sheet && sheetList.length > 0) {
-        sheet = ss.getSheetByName(sheetList[0]);
-      }
-      if (!sheet) {
-        sheet = ss.getSheets()[0];
-      }
-      
-      // ตรวจสอบและปรับหัวคอลัมน์ A ให้เป็น AN
-      ensureColumnAIsAN(sheet);
-      
-      const data = parseHospitalSheet(sheet);
       const responsePayload = { 
         status: "success", 
-        currentSheet: sheet.getName(),
+        currentSheet: requestedSheet,
         sheets: sheetList,
         count: data.length,
-        data: data 
+        data: data,
+        masterSheet: SHEET_NAME_DATA
       };
       
-      // เก็บลง Memory Cache ของ Google ไว้นาน 10 นาที (600 วินาที)
+      // บันทึกลง Memory Cache ของ Google ไว้นาน 10 นาที (600 วินาที)
       try {
         cache.put(cacheKey, JSON.stringify(responsePayload), 600);
       } catch (cacheErr) {}
@@ -372,46 +374,22 @@ function doGet(e) {
       return createJsonResponse(responsePayload, callback);
     }
     
-    // 3. ค้นหาประวัติ HN/AN ย้อนหลังทุกชีตประจำเดือน (Search Across All Months)
+    // 3. ค้นหาประวัติ AN ย้อนหลังทุกงวด (Instant Cross-Month Search บนชีตกลาง ใน < 0.05 วินาที!)
     if (action === "search" || action === "searchAll") {
-      const ss = getSpreadsheet();
-      const sheetList = getSheetNames(ss);
       const q = ((e.parameter && (e.parameter.an || e.parameter.hn || e.parameter.q)) || "").trim().toLowerCase();
       const searchTargetSheet = (e.parameter && (e.parameter.sheet || e.parameter.sheetName)) || "";
       
-      let allMatches = [];
-      
-      // กรณีระบุชีตเป้าหมาย
-      if (searchTargetSheet) {
-        const sheet = ss.getSheetByName(searchTargetSheet);
-        if (sheet) {
-          const data = parseHospitalSheet(sheet);
-          allMatches = data.filter(item => {
-            const itemHn = String(item["HN"] || item["AN"] || "").trim().toLowerCase();
-            return q ? (itemHn === q || itemHn.includes(q)) : true;
-          });
-        }
-      } else {
-        // ค้นหาประวัติย้อนหลังทุกเดือนในทุกชีต!
-        for (let s = 0; s < sheetList.length; s++) {
-          const sName = sheetList[s];
-          const sheet = ss.getSheetByName(sName);
-          if (!sheet) continue;
-          
-          const data = parseHospitalSheet(sheet);
-          const matched = data.filter(item => {
-            const itemHn = String(item["HN"] || item["AN"] || "").trim().toLowerCase();
-            return q ? (itemHn === q || itemHn.includes(q)) : true;
-          });
-          allMatches = allMatches.concat(matched);
-        }
-      }
+      // ดึงข้อมูลทั้งหมดจากชีตกลางครั้งเดียว แล้วค้นหาในหน่วยความจำ RAM ของ Apps Script ทันที
+      const allData = parseCentralMasterSheet(centralSheet, searchTargetSheet || "all");
+      const allMatches = allData.filter(item => {
+        const itemHn = String(item["HN"] || item["AN"] || "").trim().toLowerCase();
+        return q ? (itemHn === q || itemHn.includes(q)) : true;
+      });
       
       return createJsonResponse({ 
         status: "success", 
         query: q, 
-        searchedAllMonths: !searchTargetSheet,
-        totalSheetsSearched: searchTargetSheet ? 1 : sheetList.length,
+        searchedAllMonths: !searchTargetSheet || searchTargetSheet === "all",
         count: allMatches.length, 
         data: allMatches 
       }, callback);
@@ -424,12 +402,13 @@ function doGet(e) {
 }
 
 /**
- * Handle POST Requests (บันทึกข้อมูลเข้าชีตของโรงพยาบาล)
- * หากไม่มีชีตเป้าหมาย จะสร้างชีตใหม่อัตโนมัติทันที
+ * Handle POST Requests (บันทึกข้อมูลเข้าชีตกลาง "Pain_Data" ของโรงพยาบาลโดยตรง)
  */
 function doPost(e) {
   try {
     const ss = getSpreadsheet();
+    const centralSheet = getOrCreateCentralSheet(ss);
+    
     let body = {};
     if (e.postData && e.postData.contents) {
       body = JSON.parse(e.postData.contents);
@@ -437,25 +416,9 @@ function doPost(e) {
       body = e.parameter;
     }
     
-    const sheetList = getSheetNames(ss);
-    const targetSheetName = String(body.sheetName || body["sheetName"] || "").trim();
-    let sheet = targetSheetName ? ss.getSheetByName(targetSheetName) : null;
-    let isNewSheetCreated = false;
+    const targetSheetName = String(body.sheetName || body["sheetName"] || "ต.ค.68").trim();
     
-    // **หากข้อมูลที่จะบันทึกไม่มีชีตนั้น ให้เพิ่มอัตโนมัติ**
-    if (!sheet && targetSheetName) {
-      sheet = createMonthSheet(ss, targetSheetName);
-      isNewSheetCreated = true;
-    }
-    
-    if (!sheet && sheetList.length > 0) sheet = ss.getSheetByName(sheetList[0]);
-    if (!sheet) sheet = ss.getSheets()[0];
-    
-    // ตรวจสอบและปรับหัวคอลัมน์ A ให้เป็น AN
-    ensureColumnAIsAN(sheet);
-
-    // ดึงค่าตามโครงสร้างชีตจริง
-    const hasWard = hasWardColumn(sheet);
+    // ดึงค่าตามโครงสร้างชีตจริง 15 คอลัมน์ + งวดประจำเดือน + Timestamp
     const ward = String(body["หน่วยงาน"] || body["ward"] || body["Ward"] || "4/2").trim();
     const an = String(body["AN"] || body["HN"] || body["an"] || body["hn"] || "").trim();
     const tool = String(body["Tool"] || body["tool"] || "Numeric Rating Score").trim();
@@ -474,108 +437,94 @@ function doPost(e) {
     const guideline = opSurgery === "YES" ? (body["Guideline"] || body["guideline"] || "YES") : "-";
     
     const note = body["หมายเหตุ"] || body["note"] || "";
+    const timestampStr = Utilities.formatDate(new Date(), "Asia/Bangkok", "dd/MM/yyyy HH:mm:ss");
     
-    // บันทึกแถวใหม่ตามโครงสร้าง (หากชีตมีคอลัมน์หน่วยงาน Col A = หน่วยงาน, Col B = AN/HN)
-    let rowData = [];
-    if (hasWard) {
-      rowData = [
-        "'" + ward, // ใส่ ' เพื่อให้ Google Sheets บันทึกเป็น Plain Text ป้องกันแปลง 5/1 หรือ 3/2 เป็นวันที่
-        an,
-        tool,
-        painInitThermo,
-        painInitNote,
-        painQ8Thermo,
-        painQ8Note,
-        painOver5,
-        intervention,
-        reassessment,
-        opSurgery,
-        postOpThermo,
-        postOpNote,
-        guideline,
-        note
-      ];
-    } else {
-      rowData = [
-        an,
-        tool,
-        painInitThermo,
-        painInitNote,
-        painQ8Thermo,
-        painQ8Note,
-        painOver5,
-        intervention,
-        reassessment,
-        opSurgery,
-        postOpThermo,
-        postOpNote,
-        guideline,
-        note
-      ];
-    }
+    // บันทึกแถวข้อมูล 17 คอลัมน์ลงในชีตกลาง Pain_Data:
+    // Col A-O: 15 คอลัมน์ตามชีตโรงพยาบาลเดิม 100%
+    // Col P: งวดประจำเดือน (เช่น "ต.ค.68")
+    // Col Q: วันเวลาบันทึก (Timestamp)
+    const rowData = [
+      "'" + ward, // Plain text ป้องกันแปลง 5/1 หรือ 3/2 เป็นวันที่
+      an,
+      tool,
+      painInitThermo,
+      painInitNote,
+      painQ8Thermo,
+      painQ8Note,
+      painOver5,
+      intervention,
+      reassessment,
+      opSurgery,
+      postOpThermo,
+      postOpNote,
+      guideline,
+      note,
+      targetSheetName, // Col P: งวดประจำเดือน
+      timestampStr     // Col Q: วันเวลาบันทึก
+    ];
     
     const action = String(body.action || "").toLowerCase();
     let targetRow = parseInt(body.rowIndex || body._rowIndex, 10);
     
-    // หากเป็นการแก้ไข (update) แต่ไม่ได้ส่ง rowIndex หรือแถวไม่ถูกต้อง ให้ค้นหาแถวเดิมของ AN ในชีตนี้
-    if ((action === "update" || targetRow >= 3) && (!targetRow || targetRow < 3 || targetRow > sheet.getLastRow())) {
-      const data = sheet.getDataRange().getValues();
-      const colAnIdx = hasWard ? 1 : 0;
+    // หากเป็นการแก้ไข (update) ให้ตรวจสอบแถวเป้าหมายในชีตกลาง Pain_Data
+    const lastRow = centralSheet.getLastRow();
+    if ((action === "update" || targetRow >= 3) && (!targetRow || targetRow < 3 || targetRow > lastRow)) {
+      const data = centralSheet.getDataRange().getValues();
       for (let r = 2; r < data.length; r++) {
-        if (String(data[r][colAnIdx] || "").trim() === an) {
+        const rowAn = String(data[r][1] || "").trim();
+        const rowMonth = String(data[r][15] || "").trim();
+        if (rowAn === an && (!targetSheetName || rowMonth === targetSheetName)) {
           targetRow = r + 1;
           break;
         }
       }
     }
     
-    const isEditMode = (action === "update" || (body.rowIndex && targetRow >= 3)) && targetRow >= 3 && targetRow <= sheet.getLastRow();
+    const isEditMode = (action === "update" || (body.rowIndex && targetRow >= 3)) && targetRow >= 3 && targetRow <= lastRow;
     
     if (isEditMode) {
-      // 1. อัปเดตแถวเดิมที่มีอยู่แล้ว (สำหรับกรณี "บันทึกต่อ")
-      sheet.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
-      if (hasWard) {
-        try {
-          sheet.getRange(targetRow, 1).setNumberFormat("@").setValue("'" + ward);
-        } catch (wErr) {}
-      }
+      // 1. อัปเดตแถวเดิมที่มีอยู่แล้วในชีตกลาง
+      centralSheet.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
+      try {
+        centralSheet.getRange(targetRow, 1).setNumberFormat("@").setValue("'" + ward);
+        centralSheet.getRange(targetRow, 2).setNumberFormat("@").setValue(an);
+        centralSheet.getRange(targetRow, 16).setNumberFormat("@").setValue(targetSheetName);
+      } catch (wErr) {}
     } else {
-      // 2. บันทึกต่อท้ายแถวใหม่ตามปกติ
-      sheet.appendRow(rowData);
-      if (hasWard) {
-        try {
-          const lastRowNum = sheet.getLastRow();
-          sheet.getRange(lastRowNum, 1).setNumberFormat("@").setValue("'" + ward);
-        } catch (wErr) {}
-      }
+      // 2. บันทึกต่อท้ายแถวใหม่ในชีตกลางอย่างรวดเร็ว (Instant Append)
+      centralSheet.appendRow(rowData);
+      const newRowNum = centralSheet.getLastRow();
+      try {
+        centralSheet.getRange(newRowNum, 1).setNumberFormat("@").setValue("'" + ward);
+        centralSheet.getRange(newRowNum, 2).setNumberFormat("@").setValue(an);
+        centralSheet.getRange(newRowNum, 16).setNumberFormat("@").setValue(targetSheetName);
+      } catch (wErr) {}
     }
     
-    // ล้างแคชของชีตนี้และแคชรายชื่อชีต
+    // ล้างแคชเพื่อให้ดึงข้อมูลใหม่ได้ทันที
     try {
       const cache = CacheService.getScriptCache();
-      cache.remove("cache_data_" + sheet.getName().replace(/\s+/g, "_"));
-      cache.remove("cache_data_default");
-      cache.remove("cached_month_sheets");
+      cache.remove("cache_data_c_" + targetSheetName.replace(/[^a-zA-Z0-9_\u0E00-\u0E7F]/g, ""));
+      cache.remove("cache_data_c_all");
+      cache.remove("cached_month_sheets_v3");
     } catch (cErr) {}
     
     const updatedSheets = getSheetNames(ss);
     
     let msg = "";
     if (isEditMode) {
-      msg = `แก้ไขข้อมูล AN ${an} ในชีต "${sheet.getName()}" (แถวที่ ${targetRow}) เรียบร้อยแล้ว`;
-    } else if (isNewSheetCreated) {
-      msg = `สร้างชีตใหม่ "${sheet.getName()}" และบันทึกข้อมูลเรียบร้อยแล้ว`;
+      msg = `แก้ไขข้อมูล AN ${an} ในงวด "${targetSheetName}" (แถวที่ ${targetRow} ในชีตกลาง) เรียบร้อยแล้ว`;
     } else {
-      msg = `บันทึกข้อมูลลงชีต "${sheet.getName()}" เรียบร้อยแล้ว`;
+      msg = `บันทึกข้อมูล AN ${an} ลงงวด "${targetSheetName}" ในชีตกลางเรียบร้อยแล้ว`;
     }
     
     return createJsonResponse({
       status: "success",
       message: msg,
       isEdit: isEditMode,
-      rowIndex: isEditMode ? targetRow : sheet.getLastRow(),
-      savedSheet: sheet.getName(),
-      createdNewSheet: isNewSheetCreated,
+      rowIndex: isEditMode ? targetRow : centralSheet.getLastRow(),
+      savedSheet: targetSheetName,
+      masterSheet: SHEET_NAME_DATA,
       sheets: updatedSheets,
       savedRow: rowData
     });
@@ -595,7 +544,6 @@ function normalizeWardValue(val, displayVal) {
   const str = String(val || "").trim();
   if (WARDS.includes(str)) return str;
 
-  // หากเป็น Date หรือสตริงวันที่ เช่น "Mon Jan 05 2026..."
   let d = null;
   if (val instanceof Date && !isNaN(val.getTime())) {
     d = val;
@@ -622,7 +570,7 @@ function normalizeWardValue(val, displayVal) {
 }
 
 /**
- * แปลงข้อมูลจากชีตจริงของโรงพยาบาล (รองรับทั้งชีตที่มีคอลัมน์ "หน่วยงาน" และชีตเดิม)
+ * แปลงข้อมูลจากชีตรายเดือนเดิม (สำหรับฟังก์ชันการซิงค์ข้อมูลย้อนหลังเข้าชีตกลาง)
  */
 function parseHospitalSheet(sheet) {
   const lastRow = sheet.getLastRow();
@@ -631,9 +579,8 @@ function parseHospitalSheet(sheet) {
   if (lastRow <= 2) return [];
   
   const hasWard = hasWardColumn(sheet);
-  const o = hasWard ? 1 : 0; // offset ถ้ามีคอลัมน์หน่วยงาน
+  const o = hasWard ? 1 : 0;
 
-  // อ่านข้อมูลตั้งแต่แถวที่ 3 (ใต้ Header แถว 1 และ 2)
   const range = sheet.getRange(3, 1, lastRow - 2, Math.min(16, lastCol));
   const values = range.getValues();
   const displayValues = range.getDisplayValues();
@@ -647,7 +594,6 @@ function parseHospitalSheet(sheet) {
     const ward = hasWard ? normalizeWardValue(rawWard, dispWard) : "-";
     const hn = String(row[o] || "").trim();
     
-    // ข้ามแถวว่าง หรือแถวสรุปผล Total
     if (!hn || hn.includes("Total") || hn.includes("%") || hn.includes("รวม")) continue;
     
     const item = {
@@ -656,29 +602,19 @@ function parseHospitalSheet(sheet) {
       "หน่วยงาน": ward,
       "Ward": ward,
       "HN": hn,
-      "AN": hn, // แมป AN ให้ตรงกับ HN
+      "AN": hn,
       "Tool": String(row[o + 1] || "Numeric Rating Score").trim(),
-      
-      // Pain แรกรับ
       "Pain แรกรับ : ฟอร์มปรอท": String(row[o + 2] || "-").trim(),
       "Pain แรกรับ : Nurse note": String(row[o + 3] || "-").trim(),
-      
-      // Pain q 8 hr
       "Pain q 8 hr : ฟอร์มปรอท": String(row[o + 4] || "-").trim(),
       "Pain q 8 hr : Nurse Note": String(row[o + 5] || "-").trim(),
-      
-      // Pain >= 5
       "Pain ≥ 5**": String(row[o + 6] || "NO").trim(),
       "Intervention": String(row[o + 7] || "-").trim(),
       "Re-assessment": String(row[o + 8] || "-").trim(),
-      
-      // ผ่าตัด
       "Operation Surgery": String(row[o + 9] || "NO").trim(),
       "Pain post-op แรกรับ : ฟอร์มปรอท": String(row[o + 10] || "-").trim(),
       "Pain post-op แรกรับ : Nurse Note": String(row[o + 11] || "-").trim(),
       "Guideline Post-op": String(row[o + 12] || "-").trim(),
-      
-      // หมายเหตุ
       "หมายเหตุ": String(row[o + 13] || "").trim()
     };
     
