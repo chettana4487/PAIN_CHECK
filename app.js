@@ -158,14 +158,50 @@ function getSmartField(item, possibleKeys, fallback = "") {
 }
 
 /**
+ * ปรับค่าหอผู้ป่วย/หน่วยงานให้เป็นค่ามาตรฐาน ป้องกันกรณี Google Sheets แปลง "5/1" หรือ "3/2" เป็น Date อัตโนมัติ
+ */
+function normalizeWardValue(val) {
+  if (!val) return "4/2";
+  const str = String(val).trim();
+  if (WARDS.includes(str)) return str;
+
+  // หากเป็น Date หรือสตริงวันที่ เช่น "Mon Jan 05 2026..."
+  let d = null;
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    d = val;
+  } else if (typeof str === "string" && (str.includes("GMT") || str.includes("202") || str.includes("256") || str.includes("T00:00") || str.includes("Jan") || str.includes("Feb") || str.includes("Mar") || str.includes("Apr") || str.includes("May") || str.includes("Jun") || str.includes("Jul") || str.includes("Aug") || str.includes("Sep") || str.includes("Oct") || str.includes("Nov") || str.includes("Dec"))) {
+    const cleanStr = str.replace(/\s*\(.*?\)/g, "").trim();
+    const parsed = new Date(cleanStr);
+    if (!isNaN(parsed.getTime())) d = parsed;
+  }
+
+  if (d) {
+    const day = d.getDate();
+    const month = d.getMonth() + 1;
+    const c1 = `${day}/${month}`;
+    if (WARDS.includes(c1)) return c1;
+    const c2 = `${month}/${day}`;
+    if (WARDS.includes(c2)) return c2;
+  }
+
+  // หากมีตัวเลขตรงกับ ward ในรายการ
+  for (const w of WARDS) {
+    if (str === w || str.includes(w)) return w;
+  }
+
+  return str || "4/2";
+}
+
+/**
  * แปลงข้อมูลแถวจาก Google Sheet ให้อยู่ในโครงสร้างมาตรฐานของโรงพยาบาล
  */
 function normalizeRecord(item) {
   if (!item || typeof item !== "object") return {};
   
-  const ward = getSmartField(item, [
+  const rawWard = getSmartField(item, [
     "หน่วยงาน", "Ward", "ward", "แผนก", "ตึก", "หอผู้ป่วย"
   ], "4/2");
+  const ward = normalizeWardValue(rawWard);
 
   const hn = getSmartField(item, [
     "HN", "เลข HN", "HN ผู้ป่วย", "เลขที่ผู้ป่วย", "AN", "เลข AN", "Admission Number"

@@ -107,7 +107,8 @@ function ensureWardColumn(sheet) {
       sheet.setColumnWidth(1, 95);
     }
     
-    // ตั้งค่า Data Validation รายการ 13 หอผู้ป่วย (แถว 3 ถึง 1000)
+    // ตั้งค่า Format เป็นข้อความธรรมดา (Plain Text) และ Data Validation รายการ 13 หอผู้ป่วย (แถว 3 ถึง 1000)
+    sheet.getRange(3, 1, 1000, 1).setNumberFormat("@");
     const rule = SpreadsheetApp.newDataValidation()
       .requireValueInList(WARDS, true)
       .setAllowInvalid(false)
@@ -249,7 +250,8 @@ function createMonthSheet(ss, sheetName) {
       sheet.setColumnWidth(2, 100);
       sheet.setColumnWidth(3, 160);
       
-      // ตั้งค่า Data Validation สำหรับคอลัมน์ A (หน่วยงาน)
+      // ตั้งค่า Format เป็นข้อความธรรมดา (Plain Text) และ Data Validation สำหรับคอลัมน์ A (หน่วยงาน)
+      sheet.getRange(3, 1, 1000, 1).setNumberFormat("@");
       const rule = SpreadsheetApp.newDataValidation()
         .requireValueInList(WARDS, true)
         .setAllowInvalid(false)
@@ -477,7 +479,7 @@ function doPost(e) {
     let rowData = [];
     if (hasWard) {
       rowData = [
-        ward,
+        "'" + ward, // ใส่ ' เพื่อให้ Google Sheets บันทึกเป็น Plain Text ป้องกันแปลง 5/1 หรือ 3/2 เป็นวันที่
         an,
         tool,
         painInitThermo,
@@ -514,6 +516,14 @@ function doPost(e) {
     
     // บันทึกต่อท้ายแถวที่มีข้อมูล
     sheet.appendRow(rowData);
+
+    // ป้องกัน Google Sheets แปลง 5/1 เป็นวันที่ โดยบังคับให้เป็น Plain Text
+    if (hasWard) {
+      try {
+        const lastRowNum = sheet.getLastRow();
+        sheet.getRange(lastRowNum, 1).setNumberFormat("@").setValue("'" + ward);
+      } catch (wErr) {}
+    }
     
     // ล้างแคชของชีตนี้และแคชรายชื่อชีต
     try {
@@ -541,6 +551,43 @@ function doPost(e) {
 }
 
 /**
+ * แปลงค่าหอผู้ป่วย ป้องกันกรณี Google Sheets แปลง "5/1" หรือ "3/2" เป็น Date object หรือสตริงวันที่
+ */
+function normalizeWardValue(val, displayVal) {
+  if (!val && !displayVal) return "4/2";
+  const dispStr = String(displayVal || "").trim();
+  if (WARDS.includes(dispStr)) return dispStr;
+  
+  const str = String(val || "").trim();
+  if (WARDS.includes(str)) return str;
+
+  // หากเป็น Date หรือสตริงวันที่ เช่น "Mon Jan 05 2026..."
+  let d = null;
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    d = val;
+  } else if (typeof str === "string" && (str.includes("GMT") || str.includes("202") || str.includes("256") || str.includes("T00:00") || str.includes("Jan") || str.includes("Feb") || str.includes("Mar") || str.includes("Apr") || str.includes("May") || str.includes("Jun") || str.includes("Jul") || str.includes("Aug") || str.includes("Sep") || str.includes("Oct") || str.includes("Nov") || str.includes("Dec"))) {
+    const cleanStr = str.replace(/\s*\(.*?\)/g, "").trim();
+    const parsed = new Date(cleanStr);
+    if (!isNaN(parsed.getTime())) d = parsed;
+  }
+
+  if (d) {
+    const day = d.getDate();
+    const month = d.getMonth() + 1;
+    const c1 = `${day}/${month}`;
+    if (WARDS.includes(c1)) return c1;
+    const c2 = `${month}/${day}`;
+    if (WARDS.includes(c2)) return c2;
+  }
+
+  for (const w of WARDS) {
+    if (str === w || str.includes(w)) return w;
+  }
+
+  return dispStr || str || "4/2";
+}
+
+/**
  * แปลงข้อมูลจากชีตจริงของโรงพยาบาล (รองรับทั้งชีตที่มีคอลัมน์ "หน่วยงาน" และชีตเดิม)
  */
 function parseHospitalSheet(sheet) {
@@ -555,12 +602,15 @@ function parseHospitalSheet(sheet) {
   // อ่านข้อมูลตั้งแต่แถวที่ 3 (ใต้ Header แถว 1 และ 2)
   const range = sheet.getRange(3, 1, lastRow - 2, Math.min(16, lastCol));
   const values = range.getValues();
+  const displayValues = range.getDisplayValues();
   
   const results = [];
   
   for (let i = 0; i < values.length; i++) {
     const row = values[i];
-    const ward = hasWard ? String(row[0] || "").trim() : "-";
+    const rawWard = hasWard ? row[0] : "-";
+    const dispWard = hasWard && displayValues[i] ? displayValues[i][0] : "";
+    const ward = hasWard ? normalizeWardValue(rawWard, dispWard) : "-";
     const hn = String(row[o] || "").trim();
     
     // ข้ามแถวว่าง หรือแถวสรุปผล Total
