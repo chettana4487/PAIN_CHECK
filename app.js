@@ -17,10 +17,28 @@ const INTERVENTIONS = [
   "No record"
 ];
 
+// รายการหน่วยงานทั้งหมด 13 แห่ง
+const WARDS = [
+  "4/2",
+  "3/2",
+  "3/3",
+  "3/4",
+  "3/5",
+  "7/2",
+  "7/3",
+  "7/4",
+  "7/5",
+  "7/6",
+  "5/1",
+  "5/4",
+  "5/5"
+];
+
 // ข้อมูลตัวอย่างเริ่มต้นตามโครงสร้างชีตจริงของโรงพยาบาล
 const INITIAL_DEMO_RECORDS = [
   {
     "_rowIndex": 3,
+    "หน่วยงาน": "4/2",
     "HN": "1292565",
     "Tool": "Numeric Rating Score",
     "Pain แรกรับ : ฟอร์มปรอท": "YES",
@@ -38,6 +56,7 @@ const INITIAL_DEMO_RECORDS = [
   },
   {
     "_rowIndex": 4,
+    "หน่วยงาน": "3/2",
     "HN": "1600321",
     "Tool": "Numeric Rating Score",
     "Pain แรกรับ : ฟอร์มปรอท": "YES",
@@ -55,6 +74,7 @@ const INITIAL_DEMO_RECORDS = [
   },
   {
     "_rowIndex": 5,
+    "หน่วยงาน": "7/2",
     "HN": "768831",
     "Tool": "Numeric Rating Score",
     "Pain แรกรับ : ฟอร์มปรอท": "YES",
@@ -72,6 +92,7 @@ const INITIAL_DEMO_RECORDS = [
   },
   {
     "_rowIndex": 6,
+    "หน่วยงาน": "5/1",
     "HN": "986172",
     "Tool": "Facial rating scale",
     "Pain แรกรับ : ฟอร์มปรอท": "YES",
@@ -89,6 +110,7 @@ const INITIAL_DEMO_RECORDS = [
   },
   {
     "_rowIndex": 7,
+    "หน่วยงาน": "4/2",
     "HN": "773868",
     "Tool": "CPOT",
     "Pain แรกรับ : ฟอร์มปรอท": "YES",
@@ -141,6 +163,10 @@ function getSmartField(item, possibleKeys, fallback = "") {
 function normalizeRecord(item) {
   if (!item || typeof item !== "object") return {};
   
+  const ward = getSmartField(item, [
+    "หน่วยงาน", "Ward", "ward", "แผนก", "ตึก", "หอผู้ป่วย"
+  ], "4/2");
+
   const hn = getSmartField(item, [
     "HN", "เลข HN", "HN ผู้ป่วย", "เลขที่ผู้ป่วย", "AN", "เลข AN", "Admission Number"
   ], "ไม่ระบุ");
@@ -209,6 +235,8 @@ function normalizeRecord(item) {
   
   return {
     ...item,
+    "หน่วยงาน": ward,
+    "Ward": ward,
     "HN": hn,
     "AN": hn,
     "Tool": tool,
@@ -234,6 +262,113 @@ function normalizeRecord(item) {
 // ========================================================
 const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw-rC3DdTBCiCLNz_cE3IqJLvLRFdXrAVW6c3-1A8GfJlMELrNTenJr4QP86acUzwKq/exec";
 
+// 12 เดือนของไทย (ชื่อย่อและชื่อเต็ม)
+const THAI_MONTHS = [
+  { no: 1,  short: "ม.ค.", full: "มกราคม" },
+  { no: 2,  short: "ก.พ.", full: "กุมภาพันธ์" },
+  { no: 3,  short: "มี.ค.", full: "มีนาคม" },
+  { no: 4,  short: "เม.ย.", full: "เมษายน" },
+  { no: 5,  short: "พ.ค.", full: "พฤษภาคม" },
+  { no: 6,  short: "มิ.ย.", full: "มิถุนายน" },
+  { no: 7,  short: "ก.ค.", full: "กรกฎาคม" },
+  { no: 8,  short: "ส.ค.", full: "สิงหาคม" },
+  { no: 9,  short: "ก.ย.", full: "กันยายน" },
+  { no: 10, short: "ต.ค.", full: "ตุลาคม" },
+  { no: 11, short: "พ.ย.", full: "พฤศจิกายน" },
+  { no: 12, short: "ธ.ค.", full: "ธันวาคม" }
+];
+
+/**
+ * วิเคราะห์ชื่อชีตเพื่อดึง ปี และ เดือน (เช่น "ต.ค.68" -> เดือน 10, ปี 2568)
+ */
+function parseSheetYearMonth(sheetName) {
+  if (!sheetName) return null;
+  const str = String(sheetName).trim();
+  const lower = str.toLowerCase();
+  
+  // 1. หาเดือน
+  let matchedMonth = null;
+  for (const m of THAI_MONTHS) {
+    if (str.includes(m.full) || str.includes(m.short) || lower.includes(m.short.replace('.', ''))) {
+      matchedMonth = m;
+      break;
+    }
+  }
+  
+  // ถ้าไม่เจอชื่อ ให้ตรวจหาตัวเลข 1-12 แบบมีคั่น เช่น "10-2568"
+  if (!matchedMonth) {
+    const numMonthMatch = str.match(/\b([1-9]|1[0-2])\b/);
+    if (numMonthMatch) {
+      const mNo = parseInt(numMonthMatch[1], 10);
+      matchedMonth = THAI_MONTHS.find(m => m.no === mNo) || null;
+    }
+  }
+  
+  // 2. หาปี (พ.ศ. 4 หลัก หรือ 2 หลัก)
+  let year = null;
+  const match4 = str.match(/\b(25\d{2}|20\d{2})\b/);
+  if (match4) {
+    year = parseInt(match4[1], 10);
+  } else {
+    const match2 = str.match(/(\d{2})$/) || str.match(/[-_.\s](\d{2})\b/);
+    if (match2) {
+      const y2 = parseInt(match2[1], 10);
+      year = y2 >= 50 ? 2500 + y2 : 2000 + y2;
+    }
+  }
+  
+  return { month: matchedMonth, year: year, raw: str };
+}
+
+/**
+ * ดึงรายการปี (พ.ศ.) ที่มีในระบบ ผสมกับปีปัจจุบัน ± 2 ปี
+ */
+function extractAvailableYears(sheets = []) {
+  const currentBuddhistYear = (new Date()).getFullYear() + 543;
+  const yearSet = new Set();
+  
+  // ปีปัจจุบันและช่วงใกล้เคียง
+  yearSet.add(currentBuddhistYear - 1);
+  yearSet.add(currentBuddhistYear);
+  yearSet.add(currentBuddhistYear + 1);
+  yearSet.add(currentBuddhistYear + 2);
+  
+  if (Array.isArray(sheets)) {
+    sheets.forEach(s => {
+      const p = parseSheetYearMonth(s);
+      if (p && p.year) {
+        yearSet.add(p.year);
+      }
+    });
+  }
+  
+  return Array.from(yearSet).sort((a, b) => b - a); // ล่าสุดขึ้นก่อน
+}
+
+/**
+ * แมป ปี + เดือน -> ชื่อชีต (เช่น 2568 + 10 -> "ต.ค.68")
+ * หากมีชีตเดิมอยู่แล้วจะใช้ชื่อเดิม หากไม่มีจะสร้างชื่อตามแพตเทิร์นโรงพยาบาล
+ */
+function resolveSheetName(year, monthNo, existingSheets = []) {
+  // 1. ตรวจสอบว่าในชีตเดิม มีชีตที่ตรงกับเดือน-ปีนี้หรือไม่
+  if (Array.isArray(existingSheets)) {
+    for (const s of existingSheets) {
+      const parsed = parseSheetYearMonth(s);
+      if (parsed && parsed.month && parsed.month.no === monthNo && parsed.year === year) {
+        return { sheetName: s, exists: true };
+      }
+    }
+  }
+  
+  // 2. ถ้ายังไม่มีในชีตเดิม ให้สร้างชื่อชีตตามแพตเทิร์นโรงพยาบาล เช่น "ต.ค.68"
+  const monthObj = THAI_MONTHS.find(m => m.no === monthNo) || THAI_MONTHS[9];
+  const shortYear = String(year).slice(-2);
+  const generatedName = `${monthObj.short}${shortYear}`;
+  
+  const exists = Array.isArray(existingSheets) && existingSheets.includes(generatedName);
+  return { sheetName: generatedName, exists: exists };
+}
+
 // App State with LocalStorage persistence for instant 0.05s load
 let cachedSheets = [];
 try {
@@ -242,11 +377,16 @@ try {
 } catch (e) {}
 
 let cachedCurrentSheet = localStorage.getItem("painApp_currentSheet") || (cachedSheets[0] || "ต.ค.68");
+let initialParsed = parseSheetYearMonth(cachedCurrentSheet);
+let defaultYear = (initialParsed && initialParsed.year) ? initialParsed.year : (new Date().getFullYear() + 543);
+let defaultMonth = (initialParsed && initialParsed.month) ? initialParsed.month.no : (new Date().getMonth() + 1);
 
 let state = {
   records: [],
   sheets: cachedSheets.length > 0 ? cachedSheets : ["ต.ค.68"],
   currentSheet: cachedCurrentSheet,
+  selectedYear: defaultYear,
+  selectedMonth: defaultMonth,
   activeFilter: "all", // "all" | "severe" | "surgery" | "incomplete"
   viewMode: "cards",   // "cards" | "table"
   activeSearchHN: "",
@@ -300,10 +440,30 @@ function initDOMElements() {
     dashboard: document.getElementById("panelDashboard")
   };
   
-  // Monthly Sheet Selectors
+  // Monthly Sheet Selectors & Year-Month Pickers
   elements.selectSheetMonth = document.getElementById("selectSheetMonth");
   elements.btnRefreshSheets = document.getElementById("btnRefreshSheets");
   elements.formTargetSheet = document.getElementById("formTargetSheet");
+  
+  // Year & Month Selectors (Sidebar)
+  elements.selectYear = document.getElementById("selectYear");
+  elements.selectMonth = document.getElementById("selectMonth");
+  elements.sidebarSheetName = document.getElementById("sidebarSheetName");
+  elements.sidebarSheetStatusBadge = document.getElementById("sidebarSheetStatusBadge");
+
+  // Year & Month Selectors (Form)
+  elements.formSelectYear = document.getElementById("formSelectYear");
+  elements.formSelectMonth = document.getElementById("formSelectMonth");
+  elements.formSheetBadge = document.getElementById("formSheetBadge");
+  elements.formResolvedSheetName = document.getElementById("formResolvedSheetName");
+  elements.formSheetNotice = document.getElementById("formSheetNotice");
+  elements.formSheetNoticeIcon = document.getElementById("formSheetNoticeIcon");
+  elements.formSheetNoticeDesc = document.getElementById("formSheetNoticeDesc");
+
+  // Year & Month Selectors (History)
+  elements.selectHistoryYear = document.getElementById("selectHistoryYear");
+  elements.selectHistoryMonth = document.getElementById("selectHistoryMonth");
+  elements.historySheetPillText = document.getElementById("historySheetPillText");
   
   // Search & Filters
   elements.searchANInput = document.getElementById("searchANInput");
@@ -328,6 +488,7 @@ function initDOMElements() {
   elements.filterChips = document.querySelectorAll(".filter-chip");
   
   // Form Inputs
+  elements.selectWard = document.getElementById("selectWard");
   elements.inputAN = document.getElementById("inputAN");
   elements.selectTool = document.getElementById("selectTool");
   elements.painInitialThermo = document.getElementById("painInitialThermo");
@@ -359,6 +520,11 @@ function initDOMElements() {
 }
 
 function initDropdownOptions() {
+  if (elements.selectWard) {
+    elements.selectWard.innerHTML = WARDS.map(w => `<option value="${w}">${w}</option>`).join("");
+    elements.selectWard.value = WARDS[0];
+  }
+
   if (elements.selectTool) {
     elements.selectTool.innerHTML = `<option value="">เลือก Tool การประเมิน</option>` + 
       TOOLS.map(t => `<option value="${t}">${t}</option>`).join("");
@@ -380,45 +546,46 @@ function bindEvents() {
     });
   });
   
-  // Sheet Selector
-  if (elements.selectSheetMonth) {
-    elements.selectSheetMonth.addEventListener("change", (e) => {
-      const selected = e.target.value;
-      if (selected) {
-        state.currentSheet = selected;
-        if (elements.formTargetSheet) elements.formTargetSheet.value = selected;
-        fetchFromGoogleSheet(selected);
-      }
+  // Year & Month Selectors Across App (เลือกปี ตามด้วยเดือน)
+  if (elements.selectYear) {
+    elements.selectYear.addEventListener("change", (e) => {
+      handleYearMonthChange(Number(e.target.value), state.selectedMonth, true);
+    });
+  }
+  if (elements.selectMonth) {
+    elements.selectMonth.addEventListener("change", (e) => {
+      handleYearMonthChange(state.selectedYear, Number(e.target.value), true);
     });
   }
   
+  if (elements.formSelectYear) {
+    elements.formSelectYear.addEventListener("change", (e) => {
+      handleYearMonthChange(Number(e.target.value), state.selectedMonth, true);
+    });
+  }
+  if (elements.formSelectMonth) {
+    elements.formSelectMonth.addEventListener("change", (e) => {
+      handleYearMonthChange(state.selectedYear, Number(e.target.value), true);
+    });
+  }
+
+  if (elements.selectHistoryYear) {
+    elements.selectHistoryYear.addEventListener("change", (e) => {
+      handleYearMonthChange(Number(e.target.value), state.selectedMonth, true);
+    });
+  }
+  if (elements.selectHistoryMonth) {
+    elements.selectHistoryMonth.addEventListener("change", (e) => {
+      handleYearMonthChange(state.selectedYear, Number(e.target.value), true);
+    });
+  }
+
+  // Refresh sheets buttons
   if (elements.btnRefreshSheets) {
     elements.btnRefreshSheets.addEventListener("click", () => {
       fetchSheetList(true);
     });
   }
-  
-  if (elements.formTargetSheet) {
-    elements.formTargetSheet.addEventListener("change", (e) => {
-      state.currentSheet = e.target.value;
-      if (elements.selectSheetMonth) elements.selectSheetMonth.value = e.target.value;
-      if (elements.selectHistoryMonth) elements.selectHistoryMonth.value = e.target.value;
-    });
-  }
-
-  // Integrated History Month Selector
-  if (elements.selectHistoryMonth) {
-    elements.selectHistoryMonth.addEventListener("change", (e) => {
-      const selected = e.target.value;
-      if (selected) {
-        state.currentSheet = selected;
-        if (elements.selectSheetMonth) elements.selectSheetMonth.value = selected;
-        if (elements.formTargetSheet) elements.formTargetSheet.value = selected;
-        fetchFromGoogleSheet(selected);
-      }
-    });
-  }
-
   if (elements.btnRefreshHistorySheets) {
     elements.btnRefreshHistorySheets.addEventListener("click", () => {
       fetchSheetList(true);
@@ -488,12 +655,12 @@ function bindEvents() {
     });
   }
 
-  // Quick Check HN in Form (Checks all months!)
+  // Quick Check AN in Form (Checks all months!)
   if (elements.btnQuickCheckHN) {
     elements.btnQuickCheckHN.addEventListener("click", () => {
       const q = (elements.inputAN.value || "").trim();
       if (!q) {
-        showToast("กรุณากรอกเลข HN ก่อนตรวจประวัติ", "warning");
+        showToast("กรุณากรอกเลข AN ก่อนตรวจประวัติ", "warning");
         elements.inputAN.focus();
         return;
       }
@@ -572,6 +739,7 @@ function bindEvents() {
     elements.painForm.addEventListener("submit", handleFormSubmit);
     elements.painForm.addEventListener("reset", () => {
       setTimeout(() => {
+        if (elements.selectWard) elements.selectWard.value = WARDS[0];
         if (elements.selectTool) elements.selectTool.value = TOOLS[0];
         updatePainConditionUI();
         updateSurgeryConditionUI();
@@ -675,7 +843,7 @@ async function handleFormSubmit(e) {
   const tool = elements.selectTool.value;
   
   if (!hn || !tool) {
-    showToast("กรุณากรอกเลข HN และเลือก Tool การประเมิน", "warning");
+    showToast("กรุณากรอกเลข AN และเลือก Tool การประเมิน", "warning");
     return;
   }
   
@@ -704,10 +872,17 @@ async function handleFormSubmit(e) {
   const guidelinePostOp = opSurgery === "YES" ? (elements.guidelinePostOp ? elements.guidelinePostOp.value : "YES") : "-";
   const note = (elements.inputRemarks ? elements.inputRemarks.value : "").trim();
   
-  const targetSheet = elements.formTargetSheet ? elements.formTargetSheet.value : (state.currentSheet || "");
+  // คำนวณชื่อชีตตามปีและเดือนที่ผู้ใช้เลือก (หากไม่มีชีตจะเพิ่มอัตโนมัติ)
+  const resolved = resolveSheetName(state.selectedYear, state.selectedMonth, state.sheets);
+  const targetSheet = resolved.sheetName;
+  const isSheetNew = !resolved.exists;
   
+  const ward = elements.selectWard ? elements.selectWard.value : "4/2";
+
   const newRecord = {
     "_sheetName": targetSheet,
+    "หน่วยงาน": ward,
+    "Ward": ward,
     "HN": hn,
     "AN": hn,
     "Tool": tool,
@@ -733,12 +908,17 @@ async function handleFormSubmit(e) {
   // ปิดปุ่มระหว่างส่งข้อมูล
   const origBtnText = elements.btnSubmit.innerHTML;
   elements.btnSubmit.disabled = true;
-  elements.btnSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึกลงชีต...`;
+  elements.btnSubmit.innerHTML = isSheetNew 
+    ? `<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้างชีตใหม่และบันทึก...` 
+    : `<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึกลงชีต...`;
   
   if (state.googleScriptUrl) {
     try {
       const payload = {
         sheetName: targetSheet,
+        "หน่วยงาน": ward,
+        ward: ward,
+        Ward: ward,
         HN: hn,
         AN: hn,
         Tool: tool,
@@ -763,7 +943,15 @@ async function handleFormSubmit(e) {
         body: JSON.stringify(payload)
       });
       
-      showToast(`บันทึกข้อมูล HN ${hn} ลงชีต "${targetSheet}" เรียบร้อยแล้ว!`, "success");
+      // หากเป็นชีตที่ยังไม่มีในรายการ ให้เพิ่มเข้าใน state.sheets อัตโนมัติทันที
+      if (isSheetNew && !state.sheets.includes(targetSheet)) {
+        state.sheets.unshift(targetSheet);
+        localStorage.setItem("painApp_sheets", JSON.stringify(state.sheets));
+        populateSheetDropdowns(state.sheets, targetSheet);
+        showToast(`✨ ระบบเพิ่มชีต "${targetSheet}" ใน Google Sheet และบันทึก AN ${hn} สำเร็จ!`, "success");
+      } else {
+        showToast(`บันทึกข้อมูล AN ${hn} ลงชีต "${targetSheet}" เรียบร้อยแล้ว!`, "success");
+      }
       
       // ดึงข้อมูลใหม่อีกครั้ง
       setTimeout(() => {
@@ -948,11 +1136,11 @@ async function checkHNHistory(hn) {
   
   if (state.allMonthsResults.length > 0) {
     const sheetSet = new Set(state.allMonthsResults.map(r => r._sheetName || state.currentSheet).filter(Boolean));
-    showToast(`พบประวัติเดิมของ HN ${hn} ย้อนหลัง ${state.allMonthsResults.length} รายการ (ใน ${sheetSet.size} เดือน)`, "info");
+    showToast(`พบประวัติเดิมของ AN ${hn} ย้อนหลัง ${state.allMonthsResults.length} รายการ (ใน ${sheetSet.size} เดือน)`, "info");
     switchTab("history");
     renderHistoryView();
   } else {
-    showToast(`กำลังค้นหาประวัติ HN ${hn} จาก Google Sheets ทุกเดือน...`, "info");
+    showToast(`กำลังค้นหาประวัติ AN ${hn} จาก Google Sheets ทุกเดือน...`, "info");
   }
   
   // ค้นหาจาก Google Sheets ทุกเดือน
@@ -960,15 +1148,15 @@ async function checkHNHistory(hn) {
     await fetchRemoteSearchAllMonths(hn);
     if (state.allMonthsResults.length > 0) {
       const sheetSet = new Set(state.allMonthsResults.map(r => r._sheetName || state.currentSheet).filter(Boolean));
-      showToast(`พบประวัติเดิมของ HN ${hn} ย้อนหลังทั้งหมด ${state.allMonthsResults.length} รายการ (ใน ${sheetSet.size} เดือน)`, "success");
+      showToast(`พบประวัติเดิมของ AN ${hn} ย้อนหลังทั้งหมด ${state.allMonthsResults.length} รายการ (ใน ${sheetSet.size} เดือน)`, "success");
       switchTab("history");
       renderHistoryView();
     } else {
-      showToast(`ไม่พบประวัติเดิมของ HN ${hn} ในชีตทุกเดือน (สามารถลงข้อมูลเป็นคนไข้รายใหม่ได้ทันที)`, "success");
+      showToast(`ไม่พบประวัติเดิมของ AN ${hn} ในชีตทุกเดือน (สามารถลงข้อมูลเป็นคนไข้รายใหม่ได้ทันที)`, "success");
     }
   } catch (e) {
     if (state.allMonthsResults.length === 0) {
-      showToast(`ไม่พบประวัติเดิมของ HN ${hn}`, "info");
+      showToast(`ไม่พบประวัติเดิมของ AN ${hn}`, "info");
     }
   }
 }
@@ -1039,7 +1227,7 @@ function renderHistoryView() {
         <div class="search-all-banner">
           <div class="sab-left">
             <div class="sab-tag"><i class="fa-solid fa-clock-rotate-left"></i> ค้นหาประวัติย้อนหลังทุกเดือน</div>
-            <h4 class="sab-heading">ผู้ป่วย HN: <strong>${state.activeSearchHN}</strong></h4>
+            <h4 class="sab-heading">ผู้ป่วย AN: <strong>${state.activeSearchHN}</strong></h4>
             <p class="sab-sub">พบประวัติการประเมิน <strong>${list.length}</strong> รายการ จากทั้งหมด <strong>${sheetCount}</strong> เดือน/ชีต</p>
           </div>
           <div class="sab-right">
@@ -1058,7 +1246,7 @@ function renderHistoryView() {
             <i class="fa-regular fa-folder-open" style="color:#4f46e5;"></i> ชีต: ${sheetName}
           </h4>
           <span style="font-size:0.8rem; color:#64748b;">
-            ${state.activeSearchHN ? `ผลการค้นหา HN: <strong>${state.activeSearchHN}</strong> (${list.length} รายการ)` : `ผู้ป่วยทั้งหมดในชีตนี้ ${totalInSheet} รายการ`}
+            ${state.activeSearchHN ? `ผลการค้นหา AN: <strong>${state.activeSearchHN}</strong> (${list.length} รายการ)` : `ผู้ป่วยทั้งหมดในชีตนี้ ${totalInSheet} รายการ`}
           </span>
         </div>
         <div>
@@ -1083,7 +1271,7 @@ function renderHistoryView() {
     container.innerHTML = `
       <div style="text-align:center; padding:36px 16px; background:#f8fafc; border-radius:12px; border:1px dashed #cbd5e1;">
         <i class="fa-regular fa-folder-open" style="font-size:2rem; color:#94a3b8; margin-bottom:10px; display:block;"></i>
-        <p style="font-weight:700; font-size:1rem; color:#475569;">ไม่พบข้อมูลผู้ป่วยที่ค้นหา ${state.activeSearchHN ? `(HN: ${state.activeSearchHN})` : ''}</p>
+        <p style="font-weight:700; font-size:1rem; color:#475569;">ไม่พบข้อมูลผู้ป่วยที่ค้นหา ${state.activeSearchHN ? `(AN: ${state.activeSearchHN})` : ''}</p>
         <p style="font-size:0.85rem; color:#94a3b8; margin-top:4px;">
           ${isSearchingAll ? 'ค้นหาในทุกชีต/ทุกเดือนแล้ว ไม่พบข้อมูลประวัติเดิม' : 'สามารถกดปุ่ม "ทุกเดือน" เพื่อค้นหาย้อนหลังข้ามทุกชีตได้'}
         </p>
@@ -1094,7 +1282,7 @@ function renderHistoryView() {
             </button>
           ` : ''}
           <button class="btn-primary" onclick="switchTab('form')">
-            <i class="fa-solid fa-plus"></i> เริ่มบันทึก HN ใหม่
+            <i class="fa-solid fa-plus"></i> เริ่มบันทึก AN ใหม่
           </button>
         </div>
       </div>
@@ -1145,13 +1333,15 @@ function renderCardView(list, container) {
             </div>
             <div class="p-meta">
               <div class="p-hn-row">
-                <span class="p-hn">HN ${hnDisplay}</span>
-                <button class="p-btn-copy" title="คัดลอก HN" onclick="copyHN('${hnDisplay}')">
+                <span class="p-hn">AN ${hnDisplay}</span>
+                <button class="p-btn-copy" title="คัดลอก AN" onclick="copyHN('${hnDisplay}')">
                   <i class="fa-regular fa-copy"></i>
                 </button>
               </div>
               <div class="p-sub-meta">
                 <span class="p-sheet-badge"><i class="fa-regular fa-folder-open"></i> ชีต: ${item._sheetName || state.currentSheet}</span>
+                <span class="p-dot">•</span>
+                <span class="p-ward-badge" style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:6px; font-weight:700; font-size:0.75rem;"><i class="fa-solid fa-hospital"></i> ${item["หน่วยงาน"] || "4/2"}</span>
                 <span class="p-dot">•</span>
                 <span class="p-row-idx">ลำดับ #${rowNum}</span>
                 <span class="p-dot">•</span>
@@ -1312,7 +1502,8 @@ function renderSpreadsheetTableView(list, container) {
           <tr>
             <th>ลำดับ</th>
             <th>ชีต/เดือน</th>
-            <th>HN</th>
+            <th>หน่วยงาน</th>
+            <th>AN</th>
             <th>Tool</th>
             <th>แรกรับ:ปรอท</th>
             <th>แรกรับ:Note</th>
@@ -1336,11 +1527,13 @@ function renderSpreadsheetTableView(list, container) {
     const isSevere = String(item["Pain ≥ 5**"]).toUpperCase() === "YES";
     const rowNum = idx + 1;
     const hn = item["HN"] || item["AN"] || "-";
+    const wardDisplay = item["หน่วยงาน"] || item["Ward"] || "-";
     
     html += `
       <tr class="${isSevere ? 'row-severe' : ''}">
         <td style="font-weight:700; color:#64748b;">${rowNum}</td>
         <td><span class="sheet-name-badge">${item._sheetName || state.currentSheet || '-'}</span></td>
+        <td><span class="ward-tag" style="background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:6px; font-weight:700; font-size:0.8rem;"><i class="fa-solid fa-hospital" style="font-size:0.7rem; margin-right:3px;"></i>${wardDisplay}</span></td>
         <td><span class="hn-tag">${hn}</span></td>
         <td>${item["Tool"] || "-"}</td>
         <td><span class="${badgeTagClass(item["Pain แรกรับ : ฟอร์มปรอท"])}">${item["Pain แรกรับ : ฟอร์มปรอท"] || "-"}</span></td>
@@ -1356,7 +1549,7 @@ function renderSpreadsheetTableView(list, container) {
         <td><span class="${badgeTagClass(item["Guideline Post-op"])}">${item["Guideline Post-op"] || "-"}</span></td>
         <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis;" title="${item["หมายเหตุ"] || ''}">${item["หมายเหตุ"] || "-"}</td>
         <td>
-          <button class="icon-btn" style="width:28px; height:28px; font-size:0.75rem;" title="ลงข้อมูลต่อจาก HN นี้" onclick="fillFormForAN('${hn}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
+          <button class="icon-btn" style="width:28px; height:28px; font-size:0.75rem;" title="ลงข้อมูลต่อจาก AN นี้" onclick="fillFormForAN('${hn}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
             <i class="fa-solid fa-pen-to-square"></i>
           </button>
         </td>
@@ -1411,6 +1604,7 @@ window.fillFormForAN = function(hn, latestRecord = null) {
   elements.inputAN.value = hn;
   
   if (latestRecord) {
+    if (latestRecord["หน่วยงาน"] && elements.selectWard) elements.selectWard.value = latestRecord["หน่วยงาน"];
     if (latestRecord["Tool"] && elements.selectTool) elements.selectTool.value = latestRecord["Tool"];
     if (latestRecord["Operation Surgery"] && elements.selectSurgery) elements.selectSurgery.value = latestRecord["Operation Surgery"];
   }
@@ -1425,10 +1619,11 @@ window.fillFormForAN = function(hn, latestRecord = null) {
 window.copyHN = function(hn) {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(hn).then(() => {
-      showToast(`คัดลอก HN ${hn} แล้ว`, "info");
+      showToast(`คัดลอก AN ${hn} แล้ว`, "info");
     });
   }
 };
+window.copyAN = window.copyHN;
 
 /**
  * Render KPI Cards ด้านบน
@@ -1648,6 +1843,114 @@ function isMonthYearSheetName(name) {
   return hasMonth || hasDatePattern;
 }
 
+/**
+ * ฟังก์ชันจัดการเมื่อผู้ใช้เปลี่ยน ปี หรือ เดือน ในส่วนใดก็ตาม
+ */
+function handleYearMonthChange(newYear, newMonth, shouldFetch = true) {
+  if (!newYear || !newMonth) return;
+  state.selectedYear = Number(newYear);
+  state.selectedMonth = Number(newMonth);
+
+  const resolved = resolveSheetName(state.selectedYear, state.selectedMonth, state.sheets);
+  state.currentSheet = resolved.sheetName;
+  localStorage.setItem("painApp_currentSheet", resolved.sheetName);
+
+  // อัปเดต UI และซิงค์ตัวเลือกทุกแห่งให้ตรงกัน
+  updateYearMonthUI(resolved);
+
+  if (shouldFetch) {
+    if (resolved.exists) {
+      fetchFromGoogleSheet(resolved.sheetName);
+    } else {
+      // ชีตนี้ยังไม่มีใน Google Sheet
+      const cached = localStorage.getItem("painApp_sheet_cache_" + resolved.sheetName);
+      if (cached) {
+        try {
+          state.records = JSON.parse(cached).map(r => normalizeRecord(r));
+        } catch (e) { state.records = []; }
+      } else {
+        state.records = [];
+      }
+      renderKPIs();
+      renderHistoryView();
+    }
+  }
+}
+
+/**
+ * อัปเดตสถานะ ป้ายข้อความ และ Selectors ของ ปี-เดือน ในทุกหน้าจอ
+ */
+function updateYearMonthUI(resolved) {
+  if (!resolved) {
+    resolved = resolveSheetName(state.selectedYear, state.selectedMonth, state.sheets);
+  }
+
+  // 1. ซิงค์ค่าใน Dropdown ทั้ง 3 ตำแหน่ง
+  if (elements.selectYear && elements.selectYear.value != state.selectedYear) {
+    elements.selectYear.value = state.selectedYear;
+  }
+  if (elements.formSelectYear && elements.formSelectYear.value != state.selectedYear) {
+    elements.formSelectYear.value = state.selectedYear;
+  }
+  if (elements.selectHistoryYear && elements.selectHistoryYear.value != state.selectedYear) {
+    elements.selectHistoryYear.value = state.selectedYear;
+  }
+
+  if (elements.selectMonth && elements.selectMonth.value != state.selectedMonth) {
+    elements.selectMonth.value = state.selectedMonth;
+  }
+  if (elements.formSelectMonth && elements.formSelectMonth.value != state.selectedMonth) {
+    elements.formSelectMonth.value = state.selectedMonth;
+  }
+  if (elements.selectHistoryMonth && elements.selectHistoryMonth.value != state.selectedMonth) {
+    elements.selectHistoryMonth.value = state.selectedMonth;
+  }
+
+  if (elements.selectSheetMonth) elements.selectSheetMonth.value = resolved.sheetName;
+  if (elements.formTargetSheet) elements.formTargetSheet.value = resolved.sheetName;
+
+  // 2. ป้ายสถานะใน Sidebar
+  if (elements.sidebarSheetName) elements.sidebarSheetName.textContent = resolved.sheetName;
+  if (elements.sidebarSheetStatusBadge) {
+    if (resolved.exists) {
+      elements.sidebarSheetStatusBadge.className = "sheet-chip-badge exists";
+      elements.sidebarSheetStatusBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> มีในชีตแล้ว`;
+    } else {
+      elements.sidebarSheetStatusBadge.className = "sheet-chip-badge is-new";
+      elements.sidebarSheetStatusBadge.innerHTML = `<i class="fa-solid fa-sparkles"></i> ชีตใหม่`;
+    }
+  }
+
+  // 3. ป้ายสถานะใน Form บันทึก
+  if (elements.formResolvedSheetName) elements.formResolvedSheetName.textContent = resolved.sheetName;
+  if (elements.formSheetBadge) {
+    if (resolved.exists) {
+      elements.formSheetBadge.className = "badge-status-pill exists";
+      elements.formSheetBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> มีชีตในระบบแล้ว`;
+    } else {
+      elements.formSheetBadge.className = "badge-status-pill is-new";
+      elements.formSheetBadge.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> สร้างชีตใหม่อัตโนมัติ`;
+    }
+  }
+
+  if (elements.formSheetNotice) {
+    if (resolved.exists) {
+      elements.formSheetNotice.className = "form-sheet-notice exists";
+      if (elements.formSheetNoticeIcon) elements.formSheetNoticeIcon.innerHTML = `<i class="fa-solid fa-folder-check"></i>`;
+      if (elements.formSheetNoticeDesc) elements.formSheetNoticeDesc.textContent = `พบชีตนี้ใน Google Sheet แล้ว พร้อมบันทึกต่อท้ายข้อมูลเดิม`;
+    } else {
+      elements.formSheetNotice.className = "form-sheet-notice is-new";
+      if (elements.formSheetNoticeIcon) elements.formSheetNoticeIcon.innerHTML = `<i class="fa-solid fa-circle-plus"></i>`;
+      if (elements.formSheetNoticeDesc) elements.formSheetNoticeDesc.innerHTML = `ยังไม่มีแท็บชีตนี้ใน Google Sheet — <strong>ระบบจะสร้างชีต "${resolved.sheetName}" ให้โดยอัตโนมัติ</strong> เมื่อกดบันทึก`;
+    }
+  }
+
+  // 4. ป้ายชื่อชีตใน History Bar
+  if (elements.historySheetPillText) {
+    elements.historySheetPillText.textContent = resolved.sheetName + (resolved.exists ? "" : " (ชีตใหม่)");
+  }
+}
+
 function populateSheetDropdowns(sheets, activeSheet = "") {
   let filteredSheets = [];
   
@@ -1656,34 +1959,67 @@ function populateSheetDropdowns(sheets, activeSheet = "") {
   }
   
   if (filteredSheets.length === 0) {
-    filteredSheets = ["ตุลาคม 2567", "กันยายน 2567", "สิงหาคม 2567"];
+    filteredSheets = ["ต.ค.68"];
   }
   
   state.sheets = filteredSheets;
   
-  if (!activeSheet || !filteredSheets.includes(activeSheet)) {
-    activeSheet = filteredSheets[0];
+  // ตรวจสอบ activeSheet
+  if (activeSheet) {
+    const parsed = parseSheetYearMonth(activeSheet);
+    if (parsed && parsed.year) state.selectedYear = parsed.year;
+    if (parsed && parsed.month) state.selectedMonth = parsed.month.no;
   }
-  state.currentSheet = activeSheet;
   
+  const resolved = resolveSheetName(state.selectedYear, state.selectedMonth, filteredSheets);
+  state.currentSheet = resolved.sheetName;
+  
+  // สร้างตัวเลือก ปี (พ.ศ.)
+  const years = extractAvailableYears(filteredSheets);
+  const yearsHtml = years.map(y => `
+    <option value="${y}" ${Number(y) === Number(state.selectedYear) ? 'selected' : ''}>
+      ${y}
+    </option>
+  `).join("");
+
+  // สร้างตัวเลือก เดือน (ชื่อเต็ม + ย่อ)
+  const monthsHtml = THAI_MONTHS.map(m => `
+    <option value="${m.no}" ${Number(m.no) === Number(state.selectedMonth) ? 'selected' : ''}>
+      ${m.short} - ${m.full}
+    </option>
+  `).join("");
+
+  const shortMonthsHtml = THAI_MONTHS.map(m => `
+    <option value="${m.no}" ${Number(m.no) === Number(state.selectedMonth) ? 'selected' : ''}>
+      ${m.short}
+    </option>
+  `).join("");
+
+  if (elements.selectYear) elements.selectYear.innerHTML = yearsHtml;
+  if (elements.formSelectYear) elements.formSelectYear.innerHTML = yearsHtml;
+  if (elements.selectHistoryYear) elements.selectHistoryYear.innerHTML = yearsHtml;
+
+  if (elements.selectMonth) elements.selectMonth.innerHTML = monthsHtml;
+  if (elements.formSelectMonth) elements.formSelectMonth.innerHTML = monthsHtml;
+  if (elements.selectHistoryMonth) elements.selectHistoryMonth.innerHTML = shortMonthsHtml;
+  
+  // สร้าง Options สำหรับ Dropdown ชีตเดิม (Legacy Fallback)
   const optionsHtml = filteredSheets.map(s => `
-    <option value="${s}" ${s === activeSheet ? 'selected' : ''}>
+    <option value="${s}" ${s === state.currentSheet ? 'selected' : ''}>
       📅 ${s}
     </option>
   `).join("");
   
   if (elements.selectSheetMonth) {
     elements.selectSheetMonth.innerHTML = optionsHtml;
-    elements.selectSheetMonth.value = activeSheet;
+    elements.selectSheetMonth.value = state.currentSheet;
   }
   if (elements.formTargetSheet) {
     elements.formTargetSheet.innerHTML = optionsHtml;
-    elements.formTargetSheet.value = activeSheet;
+    elements.formTargetSheet.value = state.currentSheet;
   }
-  if (elements.selectHistoryMonth) {
-    elements.selectHistoryMonth.innerHTML = optionsHtml;
-    elements.selectHistoryMonth.value = activeSheet;
-  }
+
+  updateYearMonthUI(resolved);
 }
 
 async function fetchSheetList(forceRefresh = false) {
@@ -1751,7 +2087,11 @@ async function fetchFromGoogleSheet(targetSheet = "", isInitial = false) {
         renderHistoryView();
         
         if (!isInitial) {
-          showToast(`ซิงค์ข้อมูลชีต "${state.currentSheet}" สำเร็จ (${state.records.length} รายการ)`, "success");
+          if (result.isNewSheet) {
+            showToast(`งวด "${state.currentSheet}" ยังไม่มีชีตในระบบ (จะสร้างใหม่อัตโนมัติเมื่อเริ่มบันทึกคนไข้)`, "info");
+          } else {
+            showToast(`ซิงค์ข้อมูลชีต "${state.currentSheet}" สำเร็จ (${state.records.length} รายการ)`, "success");
+          }
         }
       }
     } else {

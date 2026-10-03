@@ -52,11 +52,6 @@
     
     <!-- Top Header Banner -->
     <header class="app-header">
-      <div class="header-top">
-        <span class="badge-tag">
-          <span class="pulse-dot"></span> Pain Assessment Tracker
-        </span>
-      </div>
       <h1 class="header-title">
         <i class="fa-solid fa-heart-pulse"></i> ระบบติดตามการประเมินอาการปวด
       </h1>
@@ -76,14 +71,14 @@
       </button>
     </div>
 
-    <!-- Navigation Tabs -->
-    <div class="nav-tabs-wrapper">
+    <!-- Navigation Tabs (แสดงเฉพาะ Desktop ส่วนบนมือถือมีแถบเมนูด้านล่างแล้ว) -->
+    <div class="nav-tabs-wrapper desktop-only">
       <nav class="nav-tabs">
         <button class="nav-tab-btn active" data-tab-target="form">
           <i class="fa-solid fa-file-signature"></i> แบบฟอร์มบันทึก
         </button>
         <button class="nav-tab-btn" data-tab-target="history">
-          <i class="fa-solid fa-table-list"></i> ข้อมูลประเมิน (HN)
+          <i class="fa-solid fa-table-list"></i> ข้อมูลประเมิน (AN)
         </button>
         <button class="nav-tab-btn" data-tab-target="dashboard">
           <i class="fa-solid fa-chart-pie"></i> ตัวชี้วัด QA
@@ -108,19 +103,45 @@
             </span>
           </div>
 
-          <!-- ตัวเลือก Work Sheet / ประจำเดือน -->
+          <!-- ตัวเลือก Work Sheet / เลือกปี ตามด้วยเดือน -->
           <div class="sheet-selector-box">
-            <label for="selectSheetMonth" class="sheet-selector-label">
-              <i class="fa-regular fa-calendar-days" style="color:#4f46e5;"></i> Work Sheet ประจำเดือน:
-            </label>
-            <div style="display:flex; gap:6px;">
-              <select id="selectSheetMonth" class="form-select sheet-month-select">
-                <option value="">กำลังโหลดชีตรายเดือน...</option>
-              </select>
-              <button class="icon-btn" id="btnRefreshSheets" title="รีเฟรชรายชื่อชีต" style="width:34px; height:34px; flex-shrink:0;">
+            <div class="sheet-selector-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <label class="sheet-selector-label" style="margin-bottom:0;">
+                <i class="fa-regular fa-calendar-days" style="color:#4f46e5;"></i> เลือกงวด (ปี / เดือน):
+              </label>
+              <button class="icon-btn" id="btnRefreshSheets" title="รีเฟรชรายชื่อชีต" style="width:28px; height:28px; flex-shrink:0;">
                 <i class="fa-solid fa-rotate"></i>
               </button>
             </div>
+            
+            <div class="ym-selector-grid">
+              <div class="ym-col">
+                <label class="ym-sublabel" for="selectYear">1. ปี (พ.ศ.)</label>
+                <select id="selectYear" class="form-select ym-select">
+                  <!-- Year options -->
+                </select>
+              </div>
+              <div class="ym-col">
+                <label class="ym-sublabel" for="selectMonth">2. เดือน</label>
+                <select id="selectMonth" class="form-select ym-select">
+                  <!-- Month options -->
+                </select>
+              </div>
+            </div>
+
+            <!-- สถานะชีตเป้าหมาย -->
+            <div class="current-sheet-status-tag" id="sidebarSheetStatusTag">
+              <div class="sheet-chip-info">
+                <span class="sheet-chip-prefix">ชีต:</span>
+                <strong class="sheet-chip-name" id="sidebarSheetName">ต.ค.68</strong>
+              </div>
+              <span class="sheet-chip-badge exists" id="sidebarSheetStatusBadge">
+                <i class="fa-solid fa-circle-check"></i> มีในชีตแล้ว
+              </span>
+            </div>
+
+            <!-- ซ่อน select เดิมเพื่อ backward-compatibility -->
+            <select id="selectSheetMonth" class="form-select sheet-month-select" style="display:none;"></select>
           </div>
 
           <div class="kpi-scroll-container">
@@ -162,13 +183,13 @@
           </div>
         </section>
 
-        <!-- Quick Search HN Card -->
+        <!-- Quick Search AN Card -->
         <section class="search-widget-card" id="sidebarSearchCard">
           <h4><i class="fa-solid fa-magnifying-glass" style="color:#4f46e5;"></i> ค้นหาประวัติผู้ป่วย</h4>
-          <p>กรอกเลข HN เพื่อค้นหาประวัติการประเมินย้อนหลังทุกเดือน</p>
+          <p>กรอกเลข AN เพื่อค้นหาประวัติการประเมินย้อนหลังทุกเดือน</p>
           
           <div class="search-input-group">
-            <input type="text" id="searchANInput" class="search-input" placeholder="กรอกเลข HN เช่น 1292565">
+            <input type="text" id="searchANInput" class="search-input" placeholder="กรอกเลข AN เช่น 1292565">
             <div class="search-btn-group">
               <button class="btn-search" id="btnSearchAN" title="ค้นหาประวัติ">
                 <i class="fa-solid fa-search"></i> ค้นหา
@@ -207,23 +228,72 @@
               <!-- 1. ข้อมูลผู้ป่วยและเครื่องมือ -->
               <div class="form-section general">
                 <div class="form-section-title">
-                  <i class="fa-solid fa-id-card"></i> ข้อมูลผู้ป่วยและชีตเป้าหมาย
+                  <i class="fa-solid fa-id-card"></i> ข้อมูลผู้ป่วยและงวดประจำเดือน
                 </div>
                 
-                <div class="form-group" style="margin-bottom:12px;">
-                  <label class="form-label">
-                    <i class="fa-regular fa-folder-open" style="color:#4f46e5;"></i> บันทึกลง Work Sheet ประจำเดือน: <span class="req-star">*</span>
-                  </label>
-                  <select id="formTargetSheet" class="form-select" style="background:#f8fafc; font-weight:600;">
-                    <!-- Generated by JS -->
-                  </select>
+                <!-- ตัวเลือก ปี ตามด้วยเดือน สำหรับบันทึกข้อมูล -->
+                <div class="ym-form-container">
+                  <div class="ym-form-header">
+                    <label class="form-label" style="margin-bottom:0; font-weight:700; color:#1e293b;">
+                      <i class="fa-solid fa-calendar-plus" style="color:#4f46e5;"></i> บันทึกลงงวด (เลือกปี ตามด้วยเดือน): <span class="req-star">*</span>
+                    </label>
+                    <span class="badge-status-pill exists" id="formSheetBadge">
+                      <i class="fa-solid fa-circle-check"></i> มีชีตในระบบแล้ว
+                    </span>
+                  </div>
+                  
+                  <div class="ym-form-row">
+                    <div class="ym-form-col">
+                      <label class="sub-label" for="formSelectYear">
+                        <i class="fa-regular fa-calendar"></i> 1. เลือกปี (พ.ศ.): <span class="req-star">*</span>
+                      </label>
+                      <select id="formSelectYear" class="form-select ym-select-form">
+                        <!-- Populated by JS -->
+                      </select>
+                    </div>
+                    <div class="ym-form-col">
+                      <label class="sub-label" for="formSelectMonth">
+                        <i class="fa-regular fa-calendar-days"></i> 2. เลือกเดือน: <span class="req-star">*</span>
+                      </label>
+                      <select id="formSelectMonth" class="form-select ym-select-form">
+                        <!-- Populated by JS -->
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- แจ้งเตือนสถานะชีต: มีชีตอยู่แล้ว หรือ เพิ่มชีตใหม่อัตโนมัติ -->
+                  <div class="form-sheet-notice exists" id="formSheetNotice">
+                    <div class="sheet-notice-icon" id="formSheetNoticeIcon">
+                      <i class="fa-solid fa-folder-check"></i>
+                    </div>
+                    <div class="sheet-notice-body">
+                      <div class="sheet-notice-title">
+                        ชีตเป้าหมาย: <strong id="formResolvedSheetName">ต.ค.68</strong>
+                      </div>
+                      <div class="sheet-notice-desc" id="formSheetNoticeDesc">
+                        พบชีตนี้ใน Google Sheet แล้ว พร้อมบันทึกต่อท้ายข้อมูลเดิม
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Hidden select for compatibility -->
+                  <select id="formTargetSheet" style="display:none;"></select>
                 </div>
 
-                <div class="form-grid-2">
+                <div class="form-grid-3">
                   <div class="form-group">
-                    <label class="form-label">HN ผู้ป่วย (เลขประจำตัว) <span class="req-star">*</span></label>
+                    <label class="form-label">
+                      <i class="fa-solid fa-hospital" style="color:#0284c7;"></i> หน่วยงาน <span class="req-star">*</span>
+                    </label>
+                    <select id="selectWard" class="form-select" required style="font-weight:700; color:#0369a1; background:#f0f9ff;">
+                      <!-- Populated by JS: 4/2, 3/2, 3/3, 3/4, 3/5, 7/2, 7/3, 7/4, 7/5, 7/6, 5/1, 5/4, 5/5 -->
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">AN ผู้ป่วย (เลขประจำตัว) <span class="req-star">*</span></label>
                     <div style="display:flex; gap:8px;">
-                      <input type="text" id="inputAN" class="form-input" placeholder="เลข HN เช่น 1292565" required style="flex:1; min-width:0; font-weight:700; letter-spacing:0.5px;">
+                      <input type="text" id="inputAN" class="form-input" placeholder="เลข AN เช่น 1292565" required style="flex:1; min-width:0; font-weight:700; letter-spacing:0.5px;">
                       <button type="button" class="btn-secondary" id="btnQuickCheckHN" title="ตรวจประวัติเดิม" style="padding:0 14px; flex-shrink:0; white-space:nowrap; font-size:0.85rem;">
                         <i class="fa-solid fa-search"></i> ตรวจ
                       </button>
@@ -408,21 +478,28 @@
               <!-- History Controls Bar: Month Picker & Quick Search -->
               <div class="history-controls-card">
                 <div class="history-month-row">
-                  <label for="selectHistoryMonth" style="font-size:0.82rem; font-weight:700; color:#334155; white-space:nowrap;">
-                    <i class="fa-regular fa-calendar-days" style="color:#4f46e5;"></i> ชีต:
+                  <label style="font-size:0.82rem; font-weight:700; color:#334155; white-space:nowrap;">
+                    <i class="fa-regular fa-calendar-days" style="color:#4f46e5;"></i> งวด:
                   </label>
-                  <select id="selectHistoryMonth" class="form-select" style="font-weight:700; color:#4f46e5; padding:6px 10px; font-size:0.88rem;">
-                    <!-- Synchronized with selectSheetMonth -->
+                  <select id="selectHistoryYear" class="form-select history-ym-select" title="เลือกปี (พ.ศ.)">
+                    <!-- Populated by JS -->
                   </select>
+                  <select id="selectHistoryMonth" class="form-select history-ym-select" title="เลือกเดือน">
+                    <!-- Populated by JS -->
+                  </select>
+                  <span class="history-sheet-pill" id="historySheetPill">
+                    <i class="fa-regular fa-folder"></i> <span id="historySheetPillText">ต.ค.68</span>
+                  </span>
                   <button class="icon-btn-sm" id="btnRefreshHistorySheets" title="รีเฟรชชีต">
                     <i class="fa-solid fa-rotate"></i>
                   </button>
+                  <select id="selectHistoryMonthLegacy" style="display:none;"></select>
                 </div>
 
                 <div class="history-search-row">
                   <div class="search-input-wrapper">
                     <i class="fa-solid fa-search search-icon-inside"></i>
-                    <input type="text" id="inputHistorySearch" class="history-search-input" placeholder="ค้นหา HN ย้อนหลัง เช่น 1468978">
+                    <input type="text" id="inputHistorySearch" class="history-search-input" placeholder="ค้นหา AN ย้อนหลัง เช่น 1468978">
                     <button type="button" id="btnClearHistorySearch" class="btn-clear-inside" title="ล้างค่าค้นหา" style="display:none;">
                       <i class="fa-solid fa-xmark"></i>
                     </button>
