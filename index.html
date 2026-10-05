@@ -492,23 +492,35 @@
 
               <!-- History Controls Bar: Month Picker & Quick Search -->
               <div class="history-controls-card">
-                <div class="history-month-row">
-                  <label style="font-size:0.82rem; font-weight:700; color:#334155; white-space:nowrap;">
-                    <i class="fa-regular fa-calendar-days" style="color:#4f46e5;"></i> งวด:
-                  </label>
-                  <select id="selectHistoryYear" class="form-select history-ym-select" title="เลือกปี (พ.ศ.)">
-                    <!-- Populated by JS -->
-                  </select>
-                  <select id="selectHistoryMonth" class="form-select history-ym-select" title="เลือกเดือน">
-                    <!-- Populated by JS -->
-                  </select>
-                  <span class="history-sheet-pill" id="historySheetPill">
-                    <i class="fa-regular fa-folder"></i> <span id="historySheetPillText">ต.ค.68</span>
-                  </span>
-                  <button class="icon-btn-sm" id="btnRefreshHistorySheets" title="รีเฟรชชีต">
-                    <i class="fa-solid fa-rotate"></i>
-                  </button>
-                  <select id="selectHistoryMonthLegacy" style="display:none;"></select>
+                <div class="history-controls-top-row">
+                  <div class="history-month-row">
+                    <label style="font-size:0.82rem; font-weight:700; color:#334155; white-space:nowrap;">
+                      <i class="fa-regular fa-calendar-days" style="color:#4f46e5;"></i> งวด:
+                    </label>
+                    <select id="selectHistoryYear" class="form-select history-ym-select" title="เลือกปี (พ.ศ.)">
+                      <!-- Populated by JS -->
+                    </select>
+                    <select id="selectHistoryMonth" class="form-select history-ym-select" title="เลือกเดือน">
+                      <!-- Populated by JS -->
+                    </select>
+                    <span class="history-sheet-pill" id="historySheetPill">
+                      <i class="fa-regular fa-folder"></i> <span id="historySheetPillText">ต.ค.68</span>
+                    </span>
+                    <button class="icon-btn-sm" id="btnRefreshHistorySheets" title="รีเฟรชชีต">
+                      <i class="fa-solid fa-rotate"></i>
+                    </button>
+                    <select id="selectHistoryMonthLegacy" style="display:none;"></select>
+                  </div>
+
+                  <!-- แยกดูข้อมูลตามหน่วยงาน Dropdown -->
+                  <div class="history-ward-row">
+                    <label style="font-size:0.82rem; font-weight:700; color:#334155; white-space:nowrap; display:flex; align-items:center; gap:6px;">
+                      <i class="fa-solid fa-hospital" style="color:#0284c7;"></i> หน่วยงาน:
+                    </label>
+                    <select id="selectHistoryWard" class="form-select history-ward-select" title="แยกดูข้อมูลตามหน่วยงาน">
+                      <option value="all">🏢 ทุกหน่วยงาน (ทั้งหมด)</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div class="history-search-row">
@@ -524,6 +536,11 @@
                     <span id="searchScopeText">ทุกเดือน</span>
                   </button>
                 </div>
+              </div>
+
+              <!-- Ward Filter Chips: แยกดูข้อมูลตามหน่วยงานอย่างรวดเร็วเพียงคลิกเดียว -->
+              <div class="ward-filter-chips-container" id="wardFilterChipsBar">
+                <!-- Dynamically populated chips: [🏢 ทั้งหมด] [4/2] [3/2] ... [❓ ไม่ระบุ] -->
               </div>
 
               <!-- Filter Chips -->
@@ -579,6 +596,17 @@
             <div class="chart-card">
               <h4><i class="fa-solid fa-ruler-combined" style="color:#0284c7;"></i> เครื่องมือประเมินความปวดที่ใช้ (Tool Usage)</h4>
               <div id="toolStatsContainer" class="stat-bars-list">
+                <!-- Dynamically rendered -->
+              </div>
+            </div>
+
+            <!-- Ward Distribution -->
+            <div class="chart-card">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                <h4 style="margin:0;"><i class="fa-solid fa-hospital" style="color:#0284c7;"></i> สถิติจำนวนคนไข้แยกตามหน่วยงาน</h4>
+                <span class="chip-count" id="dashTotalWardsBadge" style="background:#e0f2fe; color:#0369a1; font-weight:700; padding:3px 10px; border-radius:12px; font-size:0.75rem;">13 หน่วยงาน</span>
+              </div>
+              <div id="wardStatsContainer" class="stat-bars-list">
                 <!-- Dynamically rendered -->
               </div>
             </div>

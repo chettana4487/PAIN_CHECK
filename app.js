@@ -161,8 +161,11 @@ function getSmartField(item, possibleKeys, fallback = "") {
  * ปรับค่าหอผู้ป่วย/หน่วยงานให้เป็นค่ามาตรฐาน ป้องกันกรณี Google Sheets แปลง "5/1" หรือ "3/2" เป็น Date อัตโนมัติ
  */
 function normalizeWardValue(val) {
-  if (!val) return "4/2";
-  const str = String(val).trim();
+  if (val === undefined || val === null) return "ไม่ระบุ";
+  const str = String(val).trim().replace(/^หอผู้ป่วย\s*/, "").trim();
+  if (!str || str === "-" || str === "ไม่ระบุ" || str.toLowerCase() === "undefined" || str.toLowerCase() === "null") {
+    return "ไม่ระบุ";
+  }
   if (WARDS.includes(str)) return str;
 
   // หากเป็น Date หรือสตริงวันที่ เช่น "Mon Jan 05 2026..."
@@ -189,7 +192,7 @@ function normalizeWardValue(val) {
     if (str === w || str.includes(w)) return w;
   }
 
-  return str || "4/2";
+  return str || "ไม่ระบุ";
 }
 
 /**
@@ -200,7 +203,7 @@ function normalizeRecord(item) {
   
   const rawWard = getSmartField(item, [
     "หน่วยงาน", "Ward", "ward", "แผนก", "ตึก", "หอผู้ป่วย"
-  ], "4/2");
+  ], "ไม่ระบุ");
   const ward = normalizeWardValue(rawWard);
 
   const hn = getSmartField(item, [
@@ -424,6 +427,7 @@ let state = {
   selectedYear: defaultYear,
   selectedMonth: defaultMonth,
   activeFilter: "all", // "all" | "severe" | "surgery" | "incomplete"
+  selectedWard: "all", // "all" | "4/2" | ... | "ไม่ระบุ"
   viewMode: "cards",   // "cards" | "table"
   activeSearchHN: "",
   searchAllMonths: true, // ค้นหาทุกเดือนย้อนหลังเป็นค่าเริ่มต้น
@@ -518,6 +522,8 @@ function initDOMElements() {
   elements.btnClearHistorySearch = document.getElementById("btnClearHistorySearch");
   elements.btnToggleSearchScope = document.getElementById("btnToggleSearchScope");
   elements.searchScopeText = document.getElementById("searchScopeText");
+  elements.selectHistoryWard = document.getElementById("selectHistoryWard");
+  elements.wardFilterChipsBar = document.getElementById("wardFilterChipsBar");
   
   // View Switchers
   elements.btnViewCards = document.getElementById("btnViewCards");
@@ -565,7 +571,8 @@ function initDOMElements() {
 
 function initDropdownOptions() {
   if (elements.selectWard) {
-    elements.selectWard.innerHTML = WARDS.map(w => `<option value="${w}">${w}</option>`).join("");
+    elements.selectWard.innerHTML = WARDS.map(w => `<option value="${w}">${w}</option>`).join("") +
+      `<option value="ไม่ระบุ">ไม่ระบุ</option>`;
     elements.selectWard.value = WARDS[0];
   }
 
@@ -621,6 +628,13 @@ function bindEvents() {
   if (elements.selectHistoryMonth) {
     elements.selectHistoryMonth.addEventListener("change", (e) => {
       handleYearMonthChange(state.selectedYear, Number(e.target.value), true);
+    });
+  }
+
+  // Department / Ward filter dropdown listener
+  if (elements.selectHistoryWard) {
+    elements.selectHistoryWard.addEventListener("change", (e) => {
+      selectWardFilter(e.target.value);
     });
   }
 
@@ -929,7 +943,7 @@ async function handleFormSubmit(e) {
   const targetSheet = (isEditing && editingSheet) ? editingSheet : resolved.sheetName;
   const isSheetNew = !isEditing && !resolved.exists;
   
-  const ward = elements.selectWard ? elements.selectWard.value : "4/2";
+  const ward = elements.selectWard ? elements.selectWard.value : "ไม่ระบุ";
 
   const newRecord = {
     "_sheetName": targetSheet,
@@ -1109,6 +1123,25 @@ window.resetSearchToCurrentSheet = function() {
   if (elements.btnClearHistorySearch) elements.btnClearHistorySearch.style.display = "none";
   updateSearchScopeButtonUI();
   renderHistoryView();
+};
+
+/**
+ * สลับ/เลือกตัวกรองหน่วยงาน
+ */
+window.selectWardFilter = function(ward) {
+  state.selectedWard = ward || "all";
+  if (elements.selectHistoryWard && elements.selectHistoryWard.value !== state.selectedWard) {
+    elements.selectHistoryWard.value = state.selectedWard;
+  }
+  renderHistoryView();
+};
+
+/**
+ * คลิกจาก Dashboard เพื่อแยกดูคนไข้ของหน่วยงานนั้นทันที
+ */
+window.filterByWardAndSwitchTab = function(ward) {
+  selectWardFilter(ward);
+  switchTab("history");
 };
 
 /**
@@ -1302,7 +1335,16 @@ function renderHistoryView() {
     });
   }
   
-  // 2. กรองตาม Filter Chip
+  // 2. กรองตามหน่วยงาน (Ward Filter)
+  if (state.selectedWard && state.selectedWard !== "all") {
+    const targetWard = state.selectedWard;
+    list = list.filter(item => {
+      const itemWard = normalizeWardValue(item["หน่วยงาน"] || item["Ward"] || "");
+      return itemWard === targetWard;
+    });
+  }
+  
+  // 3. กรองตาม Filter Chip
   if (state.activeFilter === "severe") {
     list = list.filter(item => String(item["Pain ≥ 5**"]).toUpperCase() === "YES");
   } else if (state.activeFilter === "surgery") {
@@ -1314,7 +1356,8 @@ function renderHistoryView() {
     );
   }
   
-  // อัปเดตตัวเลขใน Filter Chips
+  // อัปเดตตัวเลขใน Ward Filter Chips และ Status Filter Chips
+  updateWardFilterUI();
   updateFilterChipCounts();
   
   // Header bar
@@ -1357,24 +1400,31 @@ function renderHistoryView() {
     }
   }
   
+  const wardLabel = state.selectedWard === "all" ? "ทุกหน่วยงาน" : (state.selectedWard === "ไม่ระบุ" ? "ไม่ระบุหน่วยงาน" : `หน่วยงาน ${state.selectedWard}`);
   if (elements.historyShowingSummary) {
     if (isSearchingAll) {
-      elements.historyShowingSummary.textContent = `แสดงประวัติย้อนหลัง ${list.length} รายการ`;
+      elements.historyShowingSummary.textContent = `แสดงประวัติย้อนหลัง ${list.length} รายการ • ${wardLabel}`;
     } else {
-      elements.historyShowingSummary.textContent = `แสดง ${list.length} จากทั้งหมด ${state.records.length} คนไข้`;
+      elements.historyShowingSummary.textContent = `แสดง ${list.length} จากทั้งหมด ${state.records.length} คนไข้ • ${wardLabel}`;
     }
   }
   
   // แสดงผลกรณีไม่พบข้อมูล
   if (list.length === 0) {
+    const wardMsg = state.selectedWard && state.selectedWard !== "all" ? `ในหน่วยงาน "${state.selectedWard}"` : "";
     container.innerHTML = `
       <div style="text-align:center; padding:36px 16px; background:#f8fafc; border-radius:12px; border:1px dashed #cbd5e1;">
         <i class="fa-regular fa-folder-open" style="font-size:2rem; color:#94a3b8; margin-bottom:10px; display:block;"></i>
-        <p style="font-weight:700; font-size:1rem; color:#475569;">ไม่พบข้อมูลผู้ป่วยที่ค้นหา ${state.activeSearchHN ? `(AN: ${state.activeSearchHN})` : ''}</p>
+        <p style="font-weight:700; font-size:1rem; color:#475569;">ไม่พบข้อมูลผู้ป่วย ${wardMsg} ${state.activeSearchHN ? `(AN: ${state.activeSearchHN})` : ''}</p>
         <p style="font-size:0.85rem; color:#94a3b8; margin-top:4px;">
-          ${isSearchingAll ? 'ค้นหาในทุกชีต/ทุกเดือนแล้ว ไม่พบข้อมูลประวัติเดิม' : 'สามารถกดปุ่ม "ทุกเดือน" เพื่อค้นหาย้อนหลังข้ามทุกชีตได้'}
+          ${state.selectedWard !== "all" ? 'ลองเปลี่ยนหน่วยงาน หรือเลือก "ทุกหน่วยงาน" เพื่อดูข้อมูลทั้งหมด' : (isSearchingAll ? 'ค้นหาในทุกชีต/ทุกเดือนแล้ว ไม่พบข้อมูลประวัติเดิม' : 'สามารถกดปุ่ม "ทุกเดือน" เพื่อค้นหาย้อนหลังข้ามทุกชีตได้')}
         </p>
         <div style="margin-top:14px; display:flex; justify-content:center; gap:8px; flex-wrap:wrap;">
+          ${state.selectedWard !== "all" ? `
+            <button class="btn-secondary" onclick="selectWardFilter('all')">
+              <i class="fa-solid fa-hospital-user"></i> ดูทุกหน่วยงาน
+            </button>
+          ` : ''}
           ${!isSearchingAll && state.activeSearchHN ? `
             <button class="btn-secondary" onclick="toggleSearchScopeToAll()">
               <i class="fa-solid fa-clock-rotate-left"></i> ค้นหาต่อในทุกเดือนย้อนหลัง
@@ -1407,6 +1457,9 @@ function renderCardView(list, container) {
     const isSevere = String(item["Pain ≥ 5**"]).toUpperCase() === "YES";
     const isSurgery = String(item["Operation Surgery"]).toUpperCase() === "YES";
     const hnDisplay = item["HN"] || item["AN"] || "ไม่ระบุ";
+    const rawWard = item["หน่วยงาน"] || item["Ward"] || "";
+    const wardDisplay = normalizeWardValue(rawWard);
+    const isUnspecifiedWard = wardDisplay === "ไม่ระบุ";
     const toolDisplay = item["Tool"] || "Numeric Rating Score";
     const rowNum = idx + 1;
     
@@ -1447,8 +1500,8 @@ function renderCardView(list, container) {
 
         <!-- 2. Badges Strip: หน่วยงาน, งวดชีต, เครื่องมือ และ สถานะการประเมิน -->
         <div class="p-badge-strip">
-          <span class="p-meta-pill p-meta-ward">
-            <i class="fa-solid fa-hospital"></i> หน่วยงาน ${item["หน่วยงาน"] || "4/2"}
+          <span class="p-meta-pill ${isUnspecifiedWard ? 'pill-ward-unspecified' : 'p-meta-ward'}">
+            <i class="fa-solid ${isUnspecifiedWard ? 'fa-circle-question' : 'fa-hospital'}"></i> หน่วยงาน ${wardDisplay}
           </span>
           <span class="p-meta-pill p-meta-sheet">
             <i class="fa-regular fa-folder-open"></i> ${item._sheetName || state.currentSheet}
@@ -1625,13 +1678,15 @@ function renderSpreadsheetTableView(list, container) {
     const isSevere = String(item["Pain ≥ 5**"]).toUpperCase() === "YES";
     const rowNum = idx + 1;
     const hn = item["HN"] || item["AN"] || "-";
-    const wardDisplay = item["หน่วยงาน"] || item["Ward"] || "-";
+    const rawWard = item["หน่วยงาน"] || item["Ward"] || "";
+    const wardDisplay = normalizeWardValue(rawWard);
+    const isUnspecifiedWard = wardDisplay === "ไม่ระบุ";
     
     html += `
       <tr class="${isSevere ? 'row-severe' : ''}">
         <td style="font-weight:700; color:#64748b;">${rowNum}</td>
         <td><span class="sheet-name-badge">${item._sheetName || state.currentSheet || '-'}</span></td>
-        <td><span class="ward-tag" style="background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:6px; font-weight:700; font-size:0.8rem;"><i class="fa-solid fa-hospital" style="font-size:0.7rem; margin-right:3px;"></i>${wardDisplay}</span></td>
+        <td><span class="ward-tag ${isUnspecifiedWard ? 'ward-unspecified-tag' : ''}" style="${isUnspecifiedWard ? 'background:#fff7ed; color:#c2410c; border:1px solid #fed7aa;' : 'background:#e0f2fe; color:#0369a1;'} padding:3px 8px; border-radius:6px; font-weight:700; font-size:0.8rem;"><i class="fa-solid ${isUnspecifiedWard ? 'fa-circle-question' : 'fa-hospital'}" style="font-size:0.7rem; margin-right:3px;"></i>${wardDisplay}</span></td>
         <td><span class="hn-tag">${hn}</span></td>
         <td>${item["Tool"] || "-"}</td>
         <td><span class="${badgeTagClass(item["Pain แรกรับ : ฟอร์มปรอท"])}">${item["Pain แรกรับ : ฟอร์มปรอท"] || "-"}</span></td>
@@ -1673,7 +1728,13 @@ function badgeTagClass(val, isSevereColumn = false) {
 
 function updateFilterChipCounts() {
   const isSearchingAll = Boolean(state.activeSearchHN && state.searchAllMonths);
-  const baseList = isSearchingAll ? state.allMonthsResults : state.records;
+  let baseList = isSearchingAll ? state.allMonthsResults : state.records;
+  baseList = baseList.filter(item => item && item.HN && item.HN !== "ไม่ระบุ" && item.HN !== "HN" && item._rowIndex !== 2);
+
+  // กรองตามหน่วยงานเพื่อให้ตัวเลขบน Status Chips สอดคล้องกับหน่วยงานที่กำลังเลือกดู
+  if (state.selectedWard && state.selectedWard !== "all") {
+    baseList = baseList.filter(r => normalizeWardValue(r["หน่วยงาน"] || r["Ward"] || "") === state.selectedWard);
+  }
   
   const all = baseList.length;
   const severe = baseList.filter(r => String(r["Pain ≥ 5**"]).toUpperCase() === "YES").length;
@@ -1692,6 +1753,68 @@ function updateFilterChipCounts() {
   if (elSevere) elSevere.textContent = severe;
   if (elSurgery) elSurgery.textContent = surgery;
   if (elIncomplete) elIncomplete.textContent = incomplete;
+}
+
+/**
+ * อัปเดต Dropdown และแถบ Chips สำหรับแยกดูตามหน่วยงาน
+ */
+function updateWardFilterUI() {
+  const isSearchingAll = Boolean(state.activeSearchHN && state.searchAllMonths);
+  const baseList = isSearchingAll ? state.allMonthsResults : state.records;
+  const validList = baseList.filter(item => item && item.HN && item.HN !== "ไม่ระบุ" && item.HN !== "HN" && item._rowIndex !== 2);
+
+  const counts = {};
+  WARDS.forEach(w => counts[w] = 0);
+  counts["ไม่ระบุ"] = 0;
+
+  validList.forEach(item => {
+    const raw = item["หน่วยงาน"] || item["Ward"] || "";
+    const w = normalizeWardValue(raw);
+    counts[w] = (counts[w] || 0) + 1;
+  });
+
+  const totalCount = validList.length;
+
+  // Dropdown
+  if (elements.selectHistoryWard) {
+    let opts = `<option value="all">🏢 ทุกหน่วยงาน (${totalCount})</option>`;
+    WARDS.forEach(w => {
+      opts += `<option value="${w}">${w} (${counts[w] || 0})</option>`;
+    });
+    opts += `<option value="ไม่ระบุ">❓ ไม่ระบุ (${counts["ไม่ระบุ"] || 0})</option>`;
+    elements.selectHistoryWard.innerHTML = opts;
+    elements.selectHistoryWard.value = state.selectedWard || "all";
+  }
+
+  // Chips Bar
+  const chipsContainer = elements.wardFilterChipsBar || document.getElementById("wardFilterChipsBar");
+  if (chipsContainer) {
+    let chipsHtml = `
+      <button type="button" class="ward-chip ${state.selectedWard === 'all' ? 'active' : ''}" data-ward="all" onclick="selectWardFilter('all')" title="ดูคนไข้ทุกหน่วยงาน">
+        <i class="fa-solid fa-hospital-user"></i> ทั้งหมด <span class="chip-count">${totalCount}</span>
+      </button>
+    `;
+
+    WARDS.forEach(w => {
+      const c = counts[w] || 0;
+      const isActive = state.selectedWard === w;
+      chipsHtml += `
+        <button type="button" class="ward-chip ${isActive ? 'active' : ''} ${c === 0 ? 'chip-zero' : ''}" data-ward="${w}" onclick="selectWardFilter('${w}')" title="หน่วยงาน ${w}">
+          ${w} <span class="chip-count">${c}</span>
+        </button>
+      `;
+    });
+
+    const unspecCount = counts["ไม่ระบุ"] || 0;
+    const isUnspecActive = state.selectedWard === "ไม่ระบุ";
+    chipsHtml += `
+      <button type="button" class="ward-chip unspecified-chip ${isUnspecActive ? 'active' : ''} ${unspecCount === 0 ? 'chip-zero' : ''}" data-ward="ไม่ระบุ" onclick="selectWardFilter('ไม่ระบุ')" title="คนไข้ที่ไม่ระบุหน่วยงาน">
+        <i class="fa-solid fa-circle-question"></i> ไม่ระบุ <span class="chip-count">${unspecCount}</span>
+      </button>
+    `;
+
+    chipsContainer.innerHTML = chipsHtml;
+  }
 }
 
 /**
@@ -2048,6 +2171,64 @@ function renderAnalytics() {
       `;
     }).join("");
   }
+
+  // 3. สถิติจำนวนคนไข้แยกตามหน่วยงาน (Department Distribution)
+  renderWardAnalytics();
+}
+
+/**
+ * Render สถิติจำนวนคนไข้แยกตามหน่วยงานในแท็บ Dashboard
+ */
+function renderWardAnalytics() {
+  const container = document.getElementById("wardStatsContainer");
+  if (!container) return;
+  const total = state.records.length;
+  if (total === 0) {
+    container.innerHTML = `<p style="color:#94a3b8; font-size:0.85rem;">ยังไม่มีข้อมูลในเดือนนี้</p>`;
+    return;
+  }
+  
+  const wardCounts = {};
+  WARDS.forEach(w => wardCounts[w] = 0);
+  wardCounts["ไม่ระบุ"] = 0;
+  
+  state.records.forEach(r => {
+    const raw = r["หน่วยงาน"] || r["Ward"] || "";
+    const w = normalizeWardValue(raw);
+    wardCounts[w] = (wardCounts[w] || 0) + 1;
+  });
+  
+  const entries = Object.entries(wardCounts).filter(([w, c]) => c > 0);
+  if (entries.length === 0) {
+    container.innerHTML = `<p style="color:#94a3b8; font-size:0.85rem;">ยังไม่มีข้อมูลหน่วยงาน</p>`;
+    return;
+  }
+  entries.sort((a, b) => b[1] - a[1]);
+  
+  const badgeEl = document.getElementById("dashTotalWardsBadge");
+  if (badgeEl) badgeEl.textContent = `${entries.length} หน่วยงานที่มีข้อมูล`;
+
+  container.innerHTML = entries.map(([wardName, count]) => {
+    const pct = Math.round((count / total) * 100);
+    const isUnspecified = wardName === "ไม่ระบุ";
+    return `
+      <div class="stat-bar-row" style="cursor:pointer; padding:6px 8px; border-radius:8px; transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'" onclick="filterByWardAndSwitchTab('${wardName}')" title="คลิกเพื่อแยกดูคนไข้ของหน่วยงาน ${wardName}">
+        <div class="stat-bar-header" style="margin-bottom:6px;">
+          <span style="font-weight:600; font-size:0.85rem; display:flex; align-items:center; gap:6px;">
+            <i class="fa-solid ${isUnspecified ? 'fa-circle-question' : 'fa-hospital'}" style="color:${isUnspecified ? '#ea580c' : '#0284c7'};"></i>
+            ${isUnspecified ? '<span style="color:#c2410c; font-weight:700;">ไม่ระบุ</span>' : `${wardName}`}
+          </span>
+          <span style="display:flex; align-items:center; gap:8px; font-size:0.8rem;">
+            <strong>${count} ราย</strong> (${pct}%)
+            <span style="font-size:0.75rem; color:#4f46e5; text-decoration:underline;">ดูข้อมูล <i class="fa-solid fa-arrow-right" style="font-size:0.65rem;"></i></span>
+          </span>
+        </div>
+        <div class="qa-progress-bg" style="height:8px;">
+          <div class="qa-progress-fill" style="width:${pct}%; background:${isUnspecified ? '#f97316' : '#0284c7'};"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
 }
 
 /**

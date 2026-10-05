@@ -192,7 +192,7 @@ function initCentralSheetHeaders(sheet) {
     sheet.getRange(3, 16, 5000, 1).setNumberFormat("@");
     
     const rule = SpreadsheetApp.newDataValidation()
-      .requireValueInList(WARDS, true)
+      .requireValueInList([...WARDS, "ไม่ระบุ"], true)
       .setAllowInvalid(false)
       .build();
     sheet.getRange(3, 1, 5000, 1).setDataValidation(rule);
@@ -377,7 +377,7 @@ function rebuildCentralSheet(ss) {
     for (let r = 0; r < data.length; r++) {
       const item = data[r];
       rowsToAdd.push([
-        "'" + item.ward,          // Col A: หน่วยงาน
+        "'" + (item.ward || "ไม่ระบุ"),          // Col A: หน่วยงาน
         item.an,                 // Col B: AN
         item.tool,               // Col C: Tool
         item.painInitThermo,     // Col D: Pain แรกรับ : ฟอร์มปรอท
@@ -596,7 +596,7 @@ function doPost(e) {
     const targetSheetName = String(body.sheetName || body["sheetName"] || "ต.ค.68").trim();
     
     // ดึงค่าตามโครงสร้าง 15 คอลัมน์ + งวดประจำเดือน + Timestamp
-    const ward = String(body["หน่วยงาน"] || body["ward"] || body["Ward"] || "4/2").trim();
+    const ward = String(body["หน่วยงาน"] || body["ward"] || body["Ward"] || "").trim() || "ไม่ระบุ";
     const an = String(body["AN"] || body["HN"] || body["an"] || body["hn"] || "").trim();
     const tool = String(body["Tool"] || body["tool"] || "Numeric Rating Score").trim();
     const painInitThermo = body["Painแรกรับ_ฟอร์มปรอท"] || body["Pain แรกรับ : ฟอร์มปรอท"] || body["painInitThermo"] || "YES";
@@ -725,11 +725,13 @@ function doPost(e) {
  * แปลงค่าหอผู้ป่วย
  */
 function normalizeWardValue(val, displayVal) {
-  if (!val && !displayVal) return "4/2";
-  const dispStr = String(displayVal || "").trim();
+  const dispStr = String(displayVal || "").trim().replace(/^หอผู้ป่วย\s*/, "").trim();
+  const str = String(val || "").trim().replace(/^หอผู้ป่วย\s*/, "").trim();
+  if (!dispStr && !str) return "ไม่ระบุ";
+  if (dispStr === "-" || dispStr === "ไม่ระบุ" || dispStr.toLowerCase() === "undefined" || dispStr.toLowerCase() === "null") return "ไม่ระบุ";
+  if (str === "-" || str === "ไม่ระบุ" || str.toLowerCase() === "undefined" || str.toLowerCase() === "null") return "ไม่ระบุ";
+
   if (WARDS.includes(dispStr)) return dispStr;
-  
-  const str = String(val || "").trim();
   if (WARDS.includes(str)) return str;
 
   let d = null;
@@ -754,7 +756,7 @@ function normalizeWardValue(val, displayVal) {
     if (str === w || str.includes(w)) return w;
   }
 
-  return dispStr || str || "4/2";
+  return dispStr || str || "ไม่ระบุ";
 }
 
 function createJsonResponse(data, callback) {

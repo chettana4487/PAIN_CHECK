@@ -2044,6 +2044,21 @@ body {
   }
 }
 
+.history-controls-top-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .history-controls-top-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
+}
+
 .history-month-row {
   display: flex;
   align-items: center;
@@ -2058,6 +2073,135 @@ body {
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
+}
+
+.history-ward-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+}
+
+.history-ward-row select {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font-weight: 700;
+  color: #0369a1;
+  background: #f0f9ff;
+  border: 1.5px solid #bae6fd;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  outline: none;
+  transition: var(--transition);
+}
+
+.history-ward-row select:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+  background: white;
+}
+
+/* Ward Filter Chips Container */
+.ward-filter-chips-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 8px 2px;
+  margin-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.ward-filter-chips-container::-webkit-scrollbar {
+  display: none;
+}
+
+.ward-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: white;
+  border: 1.5px solid #e0f2fe;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #0369a1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.ward-chip:hover {
+  background: #f0f9ff;
+  border-color: #7dd3fc;
+}
+
+.ward-chip.active {
+  background: #0284c7;
+  color: white;
+  border-color: #0284c7;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+}
+
+.ward-chip.unspecified-chip {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.ward-chip.unspecified-chip:hover {
+  background: #ffedd5;
+  border-color: #fdba74;
+}
+
+.ward-chip.unspecified-chip.active {
+  background: #ea580c;
+  color: white;
+  border-color: #ea580c;
+  box-shadow: 0 2px 8px rgba(234, 88, 12, 0.35);
+}
+
+.ward-chip .chip-count {
+  background: rgba(0,0,0,0.06);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+}
+
+.ward-chip.active .chip-count {
+  background: rgba(255,255,255,0.25);
+  color: white;
+}
+
+.ward-chip.chip-zero {
+  opacity: 0.45;
+}
+
+/* Pill Unspecified Styles */
+.p-meta-pill.pill-ward-unspecified {
+  background: #fff7ed !important;
+  color: #c2410c !important;
+  border: 1px solid #fed7aa !important;
+  font-weight: 700;
+}
+
+.ward-unspecified-tag {
+  background: #fff7ed !important;
+  color: #c2410c !important;
+  border: 1px solid #fed7aa !important;
+  font-weight: 700;
 }
 
 .history-search-row {
